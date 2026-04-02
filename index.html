@@ -657,10 +657,8 @@ const App = () => {
       return null;
     }
 
-    const amount = data.amount !== '' && data.amount !== null && data.amount !== undefined
-      ? Number(data.amount)
-      : 0;
-    if (!Number.isFinite(amount) || amount < 0) {
+    const amount = Number(data.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
       window.alert('Please enter a valid expense amount.');
       return null;
     }
@@ -883,7 +881,7 @@ const App = () => {
       const guestMobile = getValue(columnIndex.guestMobile);
       const paymentCollectedInput = getValue(columnIndex.paymentCollected);
 
-      if (!date || !guestHouseName || !categoryInput) {
+      if (!date || !guestHouseName || !categoryInput || !amountInput) {
         skippedRows.push(`Line ${lineNumber}: one or more required values are missing.`);
         return;
       }
@@ -901,8 +899,8 @@ const App = () => {
         return;
       }
 
-      const amount = amountInput ? Number(amountInput) : 0;
-      if (!Number.isFinite(amount) || amount < 0) {
+      const amount = Number(amountInput);
+      if (!Number.isFinite(amount) || amount <= 0) {
         skippedRows.push(`Line ${lineNumber}: amount "${amountInput}" is invalid.`);
         return;
       }
@@ -1994,7 +1992,7 @@ const BulkUploadExpensesForm = ({ formData, handleChange }) => {
     'Check-In Date','Check-In Time','Check-Out Date','Check-Out Time',
     'Visited From Location','Caretaker Name','Payment Collected From Guest'
   ];
-  const REQUIRED = ['Date','Guest House','Category'];
+  const REQUIRED = ['Date','Guest House','Category','Amount'];
   const SAMPLE_ROW = [
     '15-04-2026','Plant A','Executive House A','Food','3500',
     'Dinner for visiting delegation','Rajesh Kumar','9876543210','GM – Operations','Supply Chain',
@@ -2149,6 +2147,7 @@ const BulkUploadExpensesForm = ({ formData, handleChange }) => {
 
 const Modal = ({ type, data, guestHouses, plants, onClose, onSubmit }) => {
   const [formData, setFormData] = useState(data || {});
+  const [expenseTab, setExpenseTab] = useState('expense');
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -2193,212 +2192,249 @@ const Modal = ({ type, data, guestHouses, plants, onClose, onSubmit }) => {
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {(type === 'addExpense' || type === 'editExpense') && (
             <>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  Guest House
-                </label>
-                <select
-                  value={formData.guestHouseId || ''}
-                  onChange={(e) => handleChange('guestHouseId', e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                  required
+              {/* Tab bar */}
+              <div className="flex border-b border-slate-200 dark:border-slate-700 mb-4 -mt-1">
+                <button
+                  type="button"
+                  onClick={() => setExpenseTab('expense')}
+                  className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+                    expenseTab === 'expense'
+                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                      : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                  }`}
                 >
-                  <option value="">Select Guest House</option>
-                  {guestHouses.map(gh => (
-                    <option key={gh.id} value={gh.id}>{gh.name} ({gh.plant})</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  Category
-                </label>
-                <select
-                  value={formData.category || ''}
-                  onChange={(e) => handleChange('category', e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                  required
+                  Expense Details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpenseTab('payment')}
+                  className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+                    expenseTab === 'payment'
+                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                      : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                  }`}
                 >
-                  <option value="">Select Category</option>
-                  {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                  Payment Collection
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  Amount (₹)
-                </label>
-                <input
-                  type="number"
-                  value={formData.amount || ''}
-                  onChange={(e) => handleChange('amount', e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                  placeholder="0.00"
-                  step="0.01"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  Date
-                </label>
-                <input
-                  type="date"
-                  value={formData.date || ''}
-                  onChange={(e) => handleChange('date', e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  Guest Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.guestName ?? formData.guestDetails ?? ''}
-                  onChange={(e) => handleChange('guestName', e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                  placeholder="Guest full name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  Mobile No
-                </label>
-                <input
-                  type="tel"
-                  value={formData.guestMobile ?? ''}
-                  onChange={(e) => handleChange('guestMobile', e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                  placeholder="Guest mobile number"
-                  maxLength="15"
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                    Designation
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.guestDesignation ?? ''}
-                    onChange={(e) => handleChange('guestDesignation', e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                    placeholder="Manager / Engineer / Executive"
-                  />
+
+              {/* ── Tab 1: Expense Details ── */}
+              {expenseTab === 'expense' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                      Guest House
+                    </label>
+                    <select
+                      value={formData.guestHouseId || ''}
+                      onChange={(e) => handleChange('guestHouseId', e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                      required
+                    >
+                      <option value="">Select Guest House</option>
+                      {guestHouses.map(gh => (
+                        <option key={gh.id} value={gh.id}>{gh.name} ({gh.plant})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                      Category
+                    </label>
+                    <select
+                      value={formData.category || ''}
+                      onChange={(e) => handleChange('category', e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                      required
+                    >
+                      <option value="">Select Category</option>
+                      {categories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                      Amount (₹)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.amount || ''}
+                      onChange={(e) => handleChange('amount', e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                      placeholder="0.00"
+                      step="0.01"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                      Date
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.date || ''}
+                      onChange={(e) => handleChange('date', e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                      Description
+                    </label>
+                    <textarea
+                      value={formData.description || ''}
+                      onChange={(e) => handleChange('description', e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 resize-none"
+                      rows="3"
+                      placeholder="Enter description..."
+                      required
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                    Department
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.guestDepartment ?? ''}
-                    onChange={(e) => handleChange('guestDepartment', e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                    placeholder="Finance / HR / Production"
-                  />
+              )}
+
+              {/* ── Tab 2: Payment Collection ── */}
+              {expenseTab === 'payment' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                      Payment Collected From Guest (₹)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.paymentCollected ?? ''}
+                      onChange={(e) => handleChange('paymentCollected', e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                      Guest Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.guestName ?? formData.guestDetails ?? ''}
+                      onChange={(e) => handleChange('guestName', e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                      placeholder="Guest full name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                      Mobile No
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.guestMobile ?? ''}
+                      onChange={(e) => handleChange('guestMobile', e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                      placeholder="Guest mobile number"
+                      maxLength="15"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        Designation
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.guestDesignation ?? ''}
+                        onChange={(e) => handleChange('guestDesignation', e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                        placeholder="Manager / Engineer / Executive"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        Department
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.guestDepartment ?? ''}
+                        onChange={(e) => handleChange('guestDepartment', e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                        placeholder="Finance / HR / Production"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        Check-In Date
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.checkInDate ?? ''}
+                        onChange={(e) => handleChange('checkInDate', e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        Check-In Time
+                      </label>
+                      <input
+                        type="time"
+                        value={formData.checkInTime ?? ''}
+                        onChange={(e) => handleChange('checkInTime', e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        Check-Out Date
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.checkOutDate ?? ''}
+                        onChange={(e) => handleChange('checkOutDate', e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        Check-Out Time
+                      </label>
+                      <input
+                        type="time"
+                        value={formData.checkOutTime ?? ''}
+                        onChange={(e) => handleChange('checkOutTime', e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        Visited From Location
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.visitedFrom ?? ''}
+                        onChange={(e) => handleChange('visitedFrom', e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                        placeholder="Mumbai"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        Caretaker Name
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.caretakerName ?? ''}
+                        onChange={(e) => handleChange('caretakerName', e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                        placeholder="Ramesh"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                    Check-In Date
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.checkInDate ?? ''}
-                    onChange={(e) => handleChange('checkInDate', e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                    Check-In Time
-                  </label>
-                  <input
-                    type="time"
-                    value={formData.checkInTime ?? ''}
-                    onChange={(e) => handleChange('checkInTime', e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                    Check-Out Date
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.checkOutDate ?? ''}
-                    onChange={(e) => handleChange('checkOutDate', e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                    Check-Out Time
-                  </label>
-                  <input
-                    type="time"
-                    value={formData.checkOutTime ?? ''}
-                    onChange={(e) => handleChange('checkOutTime', e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                    Visited From Location
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.visitedFrom ?? ''}
-                    onChange={(e) => handleChange('visitedFrom', e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                    placeholder="Mumbai"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                    Caretaker Name
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.caretakerName ?? ''}
-                    onChange={(e) => handleChange('caretakerName', e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ramesh"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  Payment Collected From Guest (₹)
-                </label>
-                <input
-                  type="number"
-                  value={formData.paymentCollected ?? ''}
-                  onChange={(e) => handleChange('paymentCollected', e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                  placeholder="0.00"
-                  step="0.01"
-                  min="0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={formData.description || ''}
-                  onChange={(e) => handleChange('description', e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 resize-none"
-                  rows="3"
-                  placeholder="Enter description..."
-                  required
-                />
-              </div>
+              )}
             </>
           )}
 
