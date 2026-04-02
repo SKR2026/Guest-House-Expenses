@@ -118,7 +118,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
 
   <script>
-    // Firebase configuration — Polyplastics Guest House Management
+    // ── Firebase configuration ─────────────────────────────────────────────
     const firebaseConfig = {
       apiKey: "AIzaSyCYGV5HpF6-j_HBqix3EA-XFGmT8E698k8",
       authDomain: "skr-task.firebaseapp.com",
@@ -129,39 +129,43 @@
       measurementId: "G-67NGHMK0QR"
     };
 
-    // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
-    window.db = firebase.firestore();
-    window.analytics = firebase.analytics();
+    window.db    = firebase.firestore();
+    window.fbAnalytics = firebase.analytics();
 
-    // ── Firestore helpers ──────────────────────────────────────────────────────
-    // Load an entire collection; returns array or fallback on error/empty
+    // ── Firestore helpers ──────────────────────────────────────────────────
+
+    // Load entire collection → array of docs (with id preserved), or fallback
     window.firestoreLoad = async function(collectionName, fallback) {
       try {
         const snapshot = await window.db.collection(collectionName).get();
         if (snapshot.empty) return fallback;
-        return snapshot.docs.map(doc => ({ ...doc.data(), _docId: doc.id }));
+        return snapshot.docs.map(doc => {
+          const data = doc.data();
+          // Prefer numeric id stored in doc, fall back to doc.id string
+          return { ...data, id: data.id !== undefined ? data.id : doc.id };
+        });
       } catch (err) {
-        console.warn('Firestore load failed for', collectionName, err);
+        console.warn('[Firebase] Load failed for', collectionName, err);
         return fallback;
       }
     };
 
-    // Replace entire collection (batch write)
+    // Overwrite entire collection via batch (delete-all then write-all)
     window.firestoreSave = async function(collectionName, items) {
       try {
-        const batch = window.db.batch();
         const colRef = window.db.collection(collectionName);
-        const snapshot = await colRef.get();
-        snapshot.docs.forEach(doc => batch.delete(doc.ref));
-        items.forEach(item => {
+        const snap   = await colRef.get();
+        const batch  = window.db.batch();
+        snap.docs.forEach(doc => batch.delete(doc.ref));
+        (items || []).forEach(item => {
           const ref = colRef.doc(String(item.id));
-          const { _docId, ...data } = (item._docId !== undefined ? item : { ...item });
+          const { _docId, ...data } = item;
           batch.set(ref, data);
         });
         await batch.commit();
       } catch (err) {
-        console.warn('Firestore save failed for', collectionName, err);
+        console.warn('[Firebase] Save failed for', collectionName, err);
       }
     };
 
@@ -169,23 +173,23 @@
     window.firestoreSaveOne = async function(collectionName, item) {
       try {
         const ref = window.db.collection(collectionName).doc(String(item.id));
-        const { _docId, ...data } = (item._docId !== undefined ? item : { ...item });
+        const { _docId, ...data } = item;
         await ref.set(data);
       } catch (err) {
-        console.warn('Firestore save (single) failed for', collectionName, err);
+        console.warn('[Firebase] SaveOne failed for', collectionName, err);
       }
     };
 
-    // Delete a single document
+    // Delete a single document by id
     window.firestoreDelete = async function(collectionName, id) {
       try {
         await window.db.collection(collectionName).doc(String(id)).delete();
       } catch (err) {
-        console.warn('Firestore delete failed for', collectionName, err);
+        console.warn('[Firebase] Delete failed for', collectionName, err);
       }
     };
 
-    console.log('Firebase initialised — project: skr-task');
+    console.log('[Firebase] Initialised — project: skr-task');
   </script>
 
   <script type="text/babel" data-presets="env,react">
@@ -620,6 +624,9 @@ const categories = ['Food', 'Maintenance', 'Utilities', 'Miscellaneous'];
 const App = () => {
   const [themeMode, setThemeMode] = useState(getInitialThemeMode);
   const [currentUser, setCurrentUser] = useState(null);
+  const [dbLoading, setDbLoading] = useState(true);   // true while Firestore boot-load runs
+
+  // Initialise from localStorage immediately so the UI is never blank
   const [users, setUsers] = useState(() => loadStoredValue(STORAGE_KEYS.users, initialUsers));
   const [plants, setPlants] = useState(() => loadStoredValue(STORAGE_KEYS.plants, initialPlants));
   const [guestHouses, setGuestHouses] = useState(() => loadStoredValue(STORAGE_KEYS.guestHouses, initialGuestHouses));
@@ -640,6 +647,48 @@ const App = () => {
   const [filterDateTo, setFilterDateTo] = useState('');
   const darkMode = themeMode === 'dark-blue';
 
+  // ── Boot: load live data from Firestore, override localStorage cache ────────
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [fbUsers, fbPlants, fbGuestHouses, fbExpenses] = await Promise.all([
+          window.firestoreLoad('users',       loadStoredValue(STORAGE_KEYS.users,       initialUsers)),
+          window.firestoreLoad('plants',      loadStoredValue(STORAGE_KEYS.plants,      initialPlants)),
+          window.firestoreLoad('guestHouses', loadStoredValue(STORAGE_KEYS.guestHouses, initialGuestHouses)),
+          window.firestoreLoad('expenses',    loadStoredValue(STORAGE_KEYS.expenses,    initialExpenses)),
+        ]);
+        if (cancelled) return;
+
+        // plants collection stores objects {id, name} — extract name strings
+        const plantNames = Array.isArray(fbPlants) && fbPlants.length > 0 && typeof fbPlants[0] === 'object'
+          ? fbPlants.map(p => p.name || p).filter(Boolean)
+          : (Array.isArray(fbPlants) ? fbPlants : initialPlants);
+
+        const normalizedExpenses = (Array.isArray(fbExpenses) ? fbExpenses : initialExpenses)
+          .map(normalizeExpenseRecord);
+
+        setUsers(Array.isArray(fbUsers) && fbUsers.length ? fbUsers : initialUsers);
+        setPlants(plantNames.length ? plantNames : initialPlants);
+        setGuestHouses(Array.isArray(fbGuestHouses) && fbGuestHouses.length ? fbGuestHouses : initialGuestHouses);
+        setExpenses(normalizedExpenses.length ? normalizedExpenses : initialExpenses.map(normalizeExpenseRecord));
+
+        // Also update localStorage cache with live data
+        saveStoredValue(STORAGE_KEYS.users,       fbUsers);
+        saveStoredValue(STORAGE_KEYS.plants,       plantNames);
+        saveStoredValue(STORAGE_KEYS.guestHouses,  fbGuestHouses);
+        saveStoredValue(STORAGE_KEYS.expenses,     normalizedExpenses);
+
+        console.log('[Firebase] Boot-load complete');
+      } catch (err) {
+        console.warn('[Firebase] Boot-load failed, using localStorage fallback:', err);
+      } finally {
+        if (!cancelled) setDbLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
     document.body.classList.toggle('dark', darkMode);
@@ -653,21 +702,25 @@ const App = () => {
   }, [themeMode, darkMode]);
 
   useEffect(() => {
+    if (dbLoading) return;   // don't write back until boot-load finishes
     saveStoredValue(STORAGE_KEYS.users, users);
     window.firestoreSave('users', users);
   }, [users]);
 
   useEffect(() => {
+    if (dbLoading) return;
     saveStoredValue(STORAGE_KEYS.plants, plants);
     window.firestoreSave('plants', plants.map((p, i) => ({ id: i + 1, name: p })));
   }, [plants]);
 
   useEffect(() => {
+    if (dbLoading) return;
     saveStoredValue(STORAGE_KEYS.guestHouses, guestHouses);
     window.firestoreSave('guestHouses', guestHouses);
   }, [guestHouses]);
 
   useEffect(() => {
+    if (dbLoading) return;
     saveStoredValue(STORAGE_KEYS.expenses, expenses);
     window.firestoreSave('expenses', expenses);
   }, [expenses]);
@@ -1147,6 +1200,19 @@ const App = () => {
 
     return { total, byCategory, byPlant, byGuestHouse, count: filtered.length };
   };
+
+  // Show a loading overlay while Firestore data is being fetched on boot
+  if (dbLoading) {
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center gap-6 ${darkMode ? 'dark theme-dark-blue bg-slate-950' : 'bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100'}`}>
+        <PolyplasticsLogo />
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm font-semibold text-slate-600 dark:text-slate-400 animate-pulse">Connecting to database…</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <LoginScreen onLogin={handleLogin} darkMode={darkMode} setThemeMode={setThemeMode} />;
@@ -1718,9 +1784,7 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
                 );
               })}
               {applyFilters(expenses).length === 0 && (
-                <tr>
-                  <td colSpan={currentUser.role !== 'User' ? 6 : 5} className="py-10 text-center text-sm text-slate-400 dark:text-slate-500">No expense records found.</td>
-                </tr>
+                <tr><td colSpan={currentUser.role !== 'User' ? 6 : 5} className="py-10 text-center text-sm text-slate-400 dark:text-slate-500">No expense records found.</td></tr>
               )}
             </tbody>
           </table>
@@ -1751,10 +1815,12 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
               </tr>
             </thead>
             <tbody>
-              {applyFilters(expenses)
-                .filter(e => e.guestName && e.guestName.trim() !== '')
-                .slice(0, 10)
-                .map(expense => {
+              {(() => {
+                const paymentRows = applyFilters(expenses).filter(e => e.guestName && e.guestName.trim() !== '').slice(0, 10);
+                if (paymentRows.length === 0) return (
+                  <tr><td colSpan={currentUser.role !== 'User' ? 8 : 7} className="py-10 text-center text-sm text-slate-400 dark:text-slate-500">No guest payment records found.</td></tr>
+                );
+                return paymentRows.map(expense => {
                   const gh = guestHouses.find(g => g.id === expense.guestHouseId);
                   const hasPayment = expense.paymentCollected !== '' && expense.paymentCollected !== null && expense.paymentCollected !== undefined && Number(expense.paymentCollected) > 0;
                   return (
@@ -1785,12 +1851,8 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
                       </td>
                     </tr>
                   );
-                })}
-              {applyFilters(expenses).filter(e => e.guestName && e.guestName.trim() !== '').length === 0 && (
-                <tr>
-                  <td colSpan={currentUser.role !== 'User' ? 8 : 7} className="py-10 text-center text-sm text-slate-400 dark:text-slate-500">No guest payment records found.</td>
-                </tr>
-              )}
+                });
+              })()}
             </tbody>
           </table>
         </div>
