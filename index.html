@@ -3195,9 +3195,57 @@ const ExpenseReportView = ({ expenses, plants, currentUser, darkMode }) => {
     return t;
   }, [monthlyByCat]);
 
+  // ── COLLECTION REPORT (rows = months, cols = plants) ──
+  const monthlyCollByPlant = React.useMemo(() => {
+    const mat = Array.from({length:12}, () => ({}));
+    filtered.forEach(e => {
+      if (!e.date) return;
+      const m = parseInt(e.date.slice(5,7), 10) - 1;
+      const p = e.plant || 'Unknown';
+      mat[m][p] = (mat[m][p] || 0) + (Number(e.paymentCollected) || 0);
+    });
+    return mat;
+  }, [filtered]);
+
+  const monthlyCollTotals = React.useMemo(() =>
+    monthlyCollByPlant.map(row => Object.values(row).reduce((s,v) => s+v, 0)),
+    [monthlyCollByPlant]
+  );
+
+  const plantCollTotals = React.useMemo(() => {
+    const t = {};
+    allPlants.forEach(p => {
+      t[p] = monthlyCollByPlant.reduce((s, row) => s + (row[p]||0), 0);
+    });
+    return t;
+  }, [monthlyCollByPlant, allPlants]);
+
+  const grandCollTotal = monthlyCollTotals.reduce((s,v) => s+v, 0);
+
+  // ── CATEGORY-WISE COLLECTION (rows = categories, cols = months) ──
+  const monthlyCollByCat = React.useMemo(() => {
+    const mat = Array.from({length:12}, () => ({}));
+    filtered.forEach(e => {
+      if (!e.date) return;
+      const m = parseInt(e.date.slice(5,7), 10) - 1;
+      const c = e.category || 'Miscellaneous';
+      mat[m][c] = (mat[m][c] || 0) + (Number(e.paymentCollected) || 0);
+    });
+    return mat;
+  }, [filtered]);
+
+  const catCollTotals = React.useMemo(() => {
+    const t = {};
+    CATEGORIES.forEach(c => {
+      t[c] = monthlyCollByCat.reduce((s, row) => s + (row[c]||0), 0);
+    });
+    return t;
+  }, [monthlyCollByCat]);
+
   // bar chart max for monthly
   const maxMonthly = Math.max(...monthlyTotals, 1);
   const maxCat = Math.max(...CATEGORIES.map(c => catTotals[c] || 0), 1);
+  const maxColl = Math.max(...monthlyCollTotals, 1);
 
   const cardCls = `bg-white dark:bg-slate-900 rounded-xl shadow border border-slate-200 dark:border-slate-800`;
 
@@ -3249,8 +3297,8 @@ const ExpenseReportView = ({ expenses, plants, currentUser, darkMode }) => {
       </div>
 
       {/* Tab selector */}
-      <div className="flex gap-2">
-        {[['monthly','Month-wise by Plant'],['category','Month-wise by Category']].map(([id,label]) => (
+      <div className="flex flex-wrap gap-2">
+        {[['monthly','Month-wise by Plant'],['category','Month-wise by Category'],['collection','Month-wise Collection'],['catCollection','Category-wise Collection']].map(([id,label]) => (
           <button key={id} onClick={() => setReportTab(id)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
               reportTab === id
@@ -3400,6 +3448,186 @@ const ExpenseReportView = ({ expenses, plants, currentUser, darkMode }) => {
                     );
                   })}
                   <td className="px-4 py-3 text-right font-black text-slate-900 dark:text-slate-100 whitespace-nowrap">{fmtINR(grandTotal)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── MONTHLY COLLECTION BY PLANT ── */}
+      {reportTab === 'collection' && (
+        <div className={`${cardCls} overflow-hidden`}>
+          <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg">Month-wise Collection by Plant — {selYear}</h3>
+            <span className="text-xs text-slate-400">₹ values in INR</span>
+          </div>
+
+          {/* KPI strip */}
+          <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 border border-emerald-200 dark:border-emerald-800">
+              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide mb-1">Total Collection</p>
+              <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{fmtINR(grandCollTotal)}</p>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
+              <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">Total Expense</p>
+              <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{fmtINR(grandTotal)}</p>
+            </div>
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-200 dark:border-amber-800">
+              <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide mb-1">Net Expense</p>
+              <p className="text-xl font-bold text-amber-700 dark:text-amber-300">{fmtINR(grandTotal - grandCollTotal)}</p>
+            </div>
+            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800">
+              <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide mb-1">Recovery %</p>
+              <p className="text-xl font-bold text-purple-700 dark:text-purple-300">{grandTotal ? ((grandCollTotal/grandTotal)*100).toFixed(1)+'%' : '—'}</p>
+            </div>
+          </div>
+
+          {/* Bar sparklines */}
+          <div className="px-5 pb-5 grid grid-cols-6 md:grid-cols-12 gap-2">
+            {MONTHS.map((m,i) => (
+              <div key={m} className="flex flex-col items-center gap-1">
+                <div className="w-full flex items-end justify-center" style={{height:'60px'}}>
+                  <div className="w-8 rounded-t bg-gradient-to-t from-emerald-600 to-teal-400 transition-all"
+                    style={{height: monthlyCollTotals[i] ? `${Math.max(4,(monthlyCollTotals[i]/maxColl)*60)}px` : '3px', opacity: monthlyCollTotals[i] ? 1 : 0.2}}/>
+                </div>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">{m}</span>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 text-center leading-tight">
+                  {monthlyCollTotals[i] ? `₹${(monthlyCollTotals[i]/1000).toFixed(1)}K` : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800">
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-400 sticky left-0 bg-slate-50 dark:bg-slate-800 whitespace-nowrap min-w-[140px]">Plant</th>
+                  {MONTHS.map(m => (
+                    <th key={m} className="text-right px-3 py-3 font-semibold text-slate-600 dark:text-slate-400 whitespace-nowrap">{m}</th>
+                  ))}
+                  <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 whitespace-nowrap">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allPlants.map(p => {
+                  const hasData = plantCollTotals[p] > 0;
+                  return (
+                    <tr key={p} className={`border-t border-slate-100 dark:border-slate-800 transition-colors ${hasData ? 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10' : 'opacity-50'}`}>
+                      <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-900 whitespace-nowrap">{p}</td>
+                      {MONTHS.map((m,i) => (
+                        <td key={m} className="px-3 py-3 text-right text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                          {monthlyCollByPlant[i][p] ? fmtINR(monthlyCollByPlant[i][p]) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                        </td>
+                      ))}
+                      <td className="px-4 py-3 text-right font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 whitespace-nowrap">
+                        {plantCollTotals[p] ? fmtINR(plantCollTotals[p]) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
+                  <td className="px-4 py-3 font-bold text-slate-800 dark:text-slate-200 sticky left-0 bg-emerald-50 dark:bg-emerald-900/20 whitespace-nowrap">Monthly Total</td>
+                  {MONTHS.map((m,i) => (
+                    <td key={m} className="px-3 py-3 text-right font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                      {monthlyCollTotals[i] ? fmtINR(monthlyCollTotals[i]) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                    </td>
+                  ))}
+                  <td className="px-4 py-3 text-right font-black text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 whitespace-nowrap">{fmtINR(grandCollTotal)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── CATEGORY-WISE COLLECTION ── */}
+      {reportTab === 'catCollection' && (
+        <div className={`${cardCls} overflow-hidden`}>
+          <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg">Category-wise Collection — {selYear}</h3>
+            <span className="text-xs text-slate-400">₹ values in INR</span>
+          </div>
+
+          {/* Category bar summary */}
+          <div className="p-5 space-y-3">
+            {CATEGORIES.map(cat => {
+              const col = CAT_COLORS[cat] || CAT_COLORS.Miscellaneous;
+              const pct = catCollTotals[cat] ? (catCollTotals[cat] / (grandCollTotal || 1)) * 100 : 0;
+              const expPct = catTotals[cat] ? (catCollTotals[cat] / catTotals[cat]) * 100 : 0;
+              return (
+                <div key={cat}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-sm font-semibold ${col.text} dark:opacity-80`}>{cat}</span>
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                      {fmtINR(catCollTotals[cat])}
+                      <span className="text-slate-400 font-normal ml-1">({pct.toFixed(1)}% of total)</span>
+                      {catTotals[cat] > 0 && <span className="ml-2 text-emerald-600 dark:text-emerald-400 font-normal text-xs">{expPct.toFixed(1)}% recovered</span>}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div className={`h-full ${col.bg} rounded-full transition-all duration-700`} style={{width:`${pct}%`}}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Table — Categories as rows, Months as columns */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800">
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-400 sticky left-0 bg-slate-50 dark:bg-slate-800 whitespace-nowrap min-w-[140px]">Category</th>
+                  {MONTHS.map(m => (
+                    <th key={m} className="text-right px-3 py-3 font-semibold text-slate-600 dark:text-slate-400 whitespace-nowrap">{m}</th>
+                  ))}
+                  <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 whitespace-nowrap">Total</th>
+                  <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 whitespace-nowrap">Recovery %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {CATEGORIES.map(c => {
+                  const col = CAT_COLORS[c] || CAT_COLORS.Miscellaneous;
+                  const hasData = catCollTotals[c] > 0;
+                  const recoveryPct = catTotals[c] > 0 ? ((catCollTotals[c] / catTotals[c]) * 100).toFixed(1) + '%' : '—';
+                  return (
+                    <tr key={c} className={`border-t border-slate-100 dark:border-slate-800 transition-colors ${hasData ? 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40' : 'opacity-50'}`}>
+                      <td className={`px-4 py-3 font-semibold sticky left-0 bg-white dark:bg-slate-900 whitespace-nowrap ${col.text} dark:opacity-80`}>{c}</td>
+                      {MONTHS.map((m,i) => (
+                        <td key={m} className={`px-3 py-3 text-right whitespace-nowrap ${monthlyCollByCat[i][c] ? 'text-emerald-700 dark:text-emerald-400 font-medium' : ''}`}>
+                          {monthlyCollByCat[i][c] ? fmtINR(monthlyCollByCat[i][c]) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                        </td>
+                      ))}
+                      <td className="px-4 py-3 text-right font-bold text-emerald-700 dark:text-emerald-300 whitespace-nowrap bg-emerald-50 dark:bg-emerald-900/20">
+                        {catCollTotals[c] ? fmtINR(catCollTotals[c]) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-purple-600 dark:text-purple-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800">
+                        {recoveryPct}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
+                  <td className="px-4 py-3 font-bold text-slate-800 dark:text-slate-200 sticky left-0 bg-emerald-50 dark:bg-emerald-900/20 whitespace-nowrap">Monthly Total</td>
+                  {MONTHS.map((m,i) => {
+                    const monthCollTotal = CATEGORIES.reduce((s,c) => s + (monthlyCollByCat[i][c]||0), 0);
+                    return (
+                      <td key={m} className="px-3 py-3 text-right font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                        {monthCollTotal ? fmtINR(monthCollTotal) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                      </td>
+                    );
+                  })}
+                  <td className="px-4 py-3 text-right font-black text-emerald-800 dark:text-emerald-300 whitespace-nowrap">{fmtINR(grandCollTotal)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-purple-700 dark:text-purple-300 whitespace-nowrap">
+                    {grandTotal ? ((grandCollTotal/grandTotal)*100).toFixed(1)+'%' : '—'}
+                  </td>
                 </tr>
               </tfoot>
             </table>
