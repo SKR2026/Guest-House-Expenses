@@ -915,11 +915,7 @@ const App = () => {
       return null;
     }
 
-    const amount = Number(data.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      window.alert('Please enter a valid expense amount.');
-      return null;
-    }
+    const amount = data.amount !== '' && data.amount != null ? Number(data.amount) : 0;
 
     const paymentCollected = parseOptionalAmount(data.paymentCollected);
     if (paymentCollected === null || paymentCollected < 0) {
@@ -1118,7 +1114,7 @@ const App = () => {
       const guestMobile = getValue(columnIndex.guestMobile);
       const paymentCollectedInput = getValue(columnIndex.paymentCollected);
 
-      if (!date || !guestHouseName || !categoryInput || !amountInput) {
+      if (!date || !guestHouseName || !categoryInput) {
         skippedRows.push(`Line ${lineNumber}: one or more required values are missing.`);
         return;
       }
@@ -1136,8 +1132,8 @@ const App = () => {
         return;
       }
 
-      const amount = Number(amountInput);
-      if (!Number.isFinite(amount) || amount <= 0) {
+      const amount = amountInput ? Number(amountInput) : 0;
+      if (amountInput && (!Number.isFinite(amount) || amount < 0)) {
         skippedRows.push(`Line ${lineNumber}: amount "${amountInput}" is invalid.`);
         return;
       }
