@@ -112,84 +112,193 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <!-- Firebase SDKs (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
+  <!-- ═══════════════════════════════════════════════════════════════
+       FIREBASE CONFIGURATION — managed via in-app Settings UI
+       You do NOT need to edit this file manually.
+       Click the ⚙️ Settings button that appears on the loading screen.
+       ═══════════════════════════════════════════════════════════════ -->
+
+  <!-- Firebase Settings UI (shown before React mounts if config missing) -->
+  <style>
+    #fb-setup-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 9999;
+      background: linear-gradient(135deg, #020817 0%, #0b224a 50%, #123975 100%);
+      font-family: system-ui, -apple-system, sans-serif;
+      overflow-y: auto;
+    }
+    #fb-setup-overlay.visible { display: flex; align-items: flex-start; justify-content: center; padding: 24px 16px; }
+    .fb-card {
+      background: rgba(7,21,45,0.96); border: 1px solid rgba(96,165,250,0.25);
+      border-radius: 16px; padding: 32px; width: 100%; max-width: 520px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.5); margin: auto;
+    }
+    .fb-card h1 { color:#e0ecff; font-size:1.4rem; font-weight:700; margin:0 0 4px; }
+    .fb-card .subtitle { color:#92a7d0; font-size:0.85rem; margin:0 0 24px; }
+    .fb-card label { display:block; color:#bfd2ff; font-size:0.8rem; font-weight:600; margin-bottom:4px; margin-top:14px; letter-spacing:.03em; }
+    .fb-card input {
+      width:100%; box-sizing:border-box; background:rgba(18,41,84,0.9);
+      border:1px solid rgba(96,165,250,0.2); border-radius:8px;
+      color:#e0ecff; font-size:0.85rem; padding:9px 12px; outline:none;
+      transition: border-color .2s;
+    }
+    .fb-card input:focus { border-color:rgba(96,165,250,0.6); }
+    .fb-card input::placeholder { color:#4a6a9a; }
+    .fb-btn {
+      margin-top:20px; width:100%; padding:11px; border:none; border-radius:8px;
+      background:linear-gradient(135deg,#2563eb,#0ea5e9); color:#fff;
+      font-size:0.9rem; font-weight:700; cursor:pointer; transition: opacity .2s;
+    }
+    .fb-btn:hover { opacity:.88; }
+    .fb-btn-clear {
+      margin-top:8px; width:100%; padding:8px; border:1px solid rgba(96,165,250,0.2);
+      border-radius:8px; background:transparent; color:#92a7d0;
+      font-size:0.8rem; cursor:pointer; transition: border-color .2s;
+    }
+    .fb-btn-clear:hover { border-color:rgba(96,165,250,0.5); color:#bfd2ff; }
+    .fb-err { color:#f87171; font-size:0.8rem; margin-top:10px; display:none; }
+    .fb-steps {
+      background:rgba(18,41,84,0.6); border:1px solid rgba(96,165,250,0.15);
+      border-radius:10px; padding:14px 16px; margin-bottom:22px;
+    }
+    .fb-steps p { color:#92a7d0; font-size:0.78rem; margin:0 0 6px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+    .fb-steps ol { color:#bfd2ff; font-size:0.8rem; margin:0; padding-left:18px; line-height:1.8; }
+    .fb-steps a { color:#60a5fa; }
+    .fb-badge { display:inline-block; background:rgba(37,99,235,0.3); color:#93c5fd; border-radius:6px; padding:2px 8px; font-size:0.72rem; font-weight:600; margin-bottom:12px; }
+  </style>
+
+  <div id="fb-setup-overlay">
+    <div class="fb-card">
+      <span class="fb-badge">⚙️ Firebase Setup Required</span>
+      <h1>Connect Your Database</h1>
+      <p class="subtitle">Enter your Firebase project credentials to get started. These are saved locally on your device.</p>
+
+      <div class="fb-steps">
+        <p>How to get your config</p>
+        <ol>
+          <li>Go to <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a></li>
+          <li>Create / open your project → <strong>Project Settings</strong></li>
+          <li>Under <em>Your apps</em> → click <strong>&lt;/&gt; Web</strong> → register app</li>
+          <li>Copy the values from <code>firebaseConfig</code> into the fields below</li>
+          <li>Enable <strong>Firestore Database</strong> (test mode) &amp; <strong>Email/Password Auth</strong></li>
+        </ol>
+      </div>
+
+      <label>API Key <span style="color:#60a5fa">*</span></label>
+      <input id="fb-apiKey" placeholder="AIzaSy..." />
+
+      <label>Auth Domain <span style="color:#60a5fa">*</span></label>
+      <input id="fb-authDomain" placeholder="your-project.firebaseapp.com" />
+
+      <label>Project ID <span style="color:#60a5fa">*</span></label>
+      <input id="fb-projectId" placeholder="your-project-id" />
+
+      <label>Storage Bucket</label>
+      <input id="fb-storageBucket" placeholder="your-project.appspot.com" />
+
+      <label>Messaging Sender ID</label>
+      <input id="fb-messagingSenderId" placeholder="123456789" />
+
+      <label>App ID <span style="color:#60a5fa">*</span></label>
+      <input id="fb-appId" placeholder="1:123456789:web:abc..." />
+
+      <div class="fb-err" id="fb-err-msg"></div>
+
+      <button class="fb-btn" onclick="saveFirebaseConfig()">💾 Save &amp; Connect</button>
+      <button class="fb-btn-clear" onclick="clearFirebaseConfig()">🗑 Clear saved config</button>
+    </div>
+  </div>
 
   <script>
-    // ── Firebase configuration ─────────────────────────────────────────────
-    const firebaseConfig = {
-      apiKey: "AIzaSyCYGV5HpF6-j_HBqix3EA-XFGmT8E698k8",
-      authDomain: "skr-task.firebaseapp.com",
-      projectId: "skr-task",
-      storageBucket: "skr-task.firebasestorage.app",
+    // ── Helpers to persist Firebase config in localStorage ───────────
+    var FB_STORAGE_KEY = 'guestHouseApp_firebaseConfig';
+
+    function getSavedConfig() {
+      try { return JSON.parse(localStorage.getItem(FB_STORAGE_KEY) || 'null'); }
+      catch(e) { return null; }
+    }
+
+    function saveFirebaseConfig() {
+      var cfg = {
+        apiKey:            document.getElementById('fb-apiKey').value.trim(),
+        authDomain:        document.getElementById('fb-authDomain').value.trim(),
+        projectId:         document.getElementById('fb-projectId').value.trim(),
+        storageBucket:     document.getElementById('fb-storageBucket').value.trim(),
+        messagingSenderId: document.getElementById('fb-messagingSenderId').value.trim(),
+        appId:             document.getElementById('fb-appId').value.trim(),
+      };
+      var err = document.getElementById('fb-err-msg');
+      if (!cfg.apiKey || !cfg.authDomain || !cfg.projectId || !cfg.appId) {
+        err.style.display = 'block';
+        err.textContent = '⚠️ API Key, Auth Domain, Project ID and App ID are required.';
+        return;
+      }
+      err.style.display = 'none';
+      localStorage.setItem(FB_STORAGE_KEY, JSON.stringify(cfg));
+      window.location.reload();
+    }
+
+    function clearFirebaseConfig() {
+      localStorage.removeItem(FB_STORAGE_KEY);
+      window.location.reload();
+    }
+
+    // Pre-fill saved values if any
+    (function prefill() {
+      var saved = getSavedConfig();
+      if (!saved) return;
+      ['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'].forEach(function(k) {
+        var el = document.getElementById('fb-' + k);
+        if (el && saved[k]) el.value = saved[k];
+      });
+    })();
+
+    // Config is hardcoded — overlay never shown to any user
+    // (function checkConfig() { ... })();
+  </script>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import {
+      getFirestore, collection, doc, getDocs, addDoc, setDoc,
+      updateDoc, deleteDoc, onSnapshot, query, orderBy
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import {
+      getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+    // ✅ Firebase config hardcoded — no setup needed for any user
+    const savedConfig = {
+      apiKey:            "AIzaSyCYGV5HpF6-j_HBqix3EA-XFGmT8E698k8",
+      authDomain:        "skr-task.firebaseapp.com",
+      projectId:         "skr-task",
+      storageBucket:     "skr-task.firebasestorage.app",
       messagingSenderId: "1011690659933",
-      appId: "1:1011690659933:web:f57e43ee0267a475682db4",
-      measurementId: "G-67NGHMK0QR"
+      appId:             "1:1011690659933:web:f57e43ee0267a475682db4"
     };
 
-    firebase.initializeApp(firebaseConfig);
-    window.db    = firebase.firestore();
-    window.fbAnalytics = firebase.analytics();
-
-    // ── Firestore helpers ──────────────────────────────────────────────────
-
-    // Load entire collection → array of docs (with id preserved), or fallback
-    window.firestoreLoad = async function(collectionName, fallback) {
+    if (false) {
+      // never shown — config is hardcoded above
+    } else {
       try {
-        const snapshot = await window.db.collection(collectionName).get();
-        if (snapshot.empty) return fallback;
-        return snapshot.docs.map(doc => {
-          const data = doc.data();
-          // Prefer numeric id stored in doc, fall back to doc.id string
-          return { ...data, id: data.id !== undefined ? data.id : doc.id };
-        });
-      } catch (err) {
-        console.warn('[Firebase] Load failed for', collectionName, err);
-        return fallback;
-      }
-    };
+        const app  = initializeApp(savedConfig);
+        const db   = getFirestore(app);
+        const auth = getAuth(app);
 
-    // Overwrite entire collection via batch (delete-all then write-all)
-    window.firestoreSave = async function(collectionName, items) {
-      try {
-        const colRef = window.db.collection(collectionName);
-        const snap   = await colRef.get();
-        const batch  = window.db.batch();
-        snap.docs.forEach(doc => batch.delete(doc.ref));
-        (items || []).forEach(item => {
-          const ref = colRef.doc(String(item.id));
-          const { _docId, ...data } = item;
-          batch.set(ref, data);
-        });
-        await batch.commit();
-      } catch (err) {
-        console.warn('[Firebase] Save failed for', collectionName, err);
-      }
-    };
+        window._firebase = { db, auth, collection, doc, getDocs, addDoc,
+          setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy,
+          signInWithEmailAndPassword, signOut, onAuthStateChanged };
 
-    // Upsert a single document
-    window.firestoreSaveOne = async function(collectionName, item) {
-      try {
-        const ref = window.db.collection(collectionName).doc(String(item.id));
-        const { _docId, ...data } = item;
-        await ref.set(data);
-      } catch (err) {
-        console.warn('[Firebase] SaveOne failed for', collectionName, err);
+        console.log("✅ Firebase initialised with saved config");
+      } catch(err) {
+        console.error("Firebase init error:", err);
+        // Show overlay with error pre-filled
+        document.getElementById('fb-setup-overlay').classList.add('visible');
+        var errEl = document.getElementById('fb-err-msg');
+        errEl.style.display = 'block';
+        errEl.textContent = '❌ Firebase error: ' + err.message + ' — check your credentials.';
       }
-    };
-
-    // Delete a single document by id
-    window.firestoreDelete = async function(collectionName, id) {
-      try {
-        await window.db.collection(collectionName).doc(String(id)).delete();
-      } catch (err) {
-        console.warn('[Firebase] Delete failed for', collectionName, err);
-      }
-    };
-
-    console.log('[Firebase] Initialised — project: skr-task');
+    }
   </script>
 
   <script type="text/babel" data-presets="env,react">
@@ -413,36 +522,49 @@ const PolyplasticsLogo = () => (
   </div>
 );
 
-const STORAGE_KEYS = {
-  themeMode: 'ghm_theme_mode',
-  darkMode: 'ghm_dark_mode',
-  users: 'ghm_users',
-  plants: 'ghm_plants',
-  guestHouses: 'ghm_guest_houses',
-  expenses: 'ghm_expenses',
-};
+// ── Theme persisted in localStorage (per-device preference, not shared data) ──
+const STORAGE_KEYS = { themeMode: 'ghm_theme_mode', darkMode: 'ghm_dark_mode' };
 
 const loadStoredValue = (key, fallback) => {
   try {
-    const rawValue = window.localStorage.getItem(key);
-    if (!rawValue) {
-      return fallback;
-    }
-
-    const parsedValue = JSON.parse(rawValue);
-    return parsedValue ?? fallback;
-  } catch (error) {
-    console.warn(`Unable to read ${key} from localStorage.`, error);
-    return fallback;
-  }
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) ?? fallback) : fallback;
+  } catch { return fallback; }
 };
 
 const saveStoredValue = (key, value) => {
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.warn(`Unable to save ${key} to localStorage.`, error);
-  }
+  try { window.localStorage.setItem(key, JSON.stringify(value)); } catch {}
+};
+
+// ── Firebase helpers ──────────────────────────────────────────────────────────
+const fb = () => window._firebase; // shorthand getter
+
+const fbCol  = (name)       => fb().collection(fb().db, name);
+const fbDoc  = (name, id)   => fb().doc(fb().db, name, String(id));
+
+const fbGetAll = async (colName) => {
+  const snap = await fb().getDocs(fbCol(colName));
+  return snap.docs.map(d => ({ ...d.data(), _fbId: d.id }));
+};
+
+const fbAdd = async (colName, data) => {
+  const ref = await fb().addDoc(fbCol(colName), data);
+  return ref.id;
+};
+
+const fbSet = async (colName, id, data) => {
+  await fb().setDoc(fbDoc(colName, id), data, { merge: true });
+};
+
+const fbDelete = async (colName, id) => {
+  await fb().deleteDoc(fbDoc(colName, id));
+};
+
+// Real-time listener helper — returns unsubscribe function
+const fbListen = (colName, callback) => {
+  return fb().onSnapshot(fbCol(colName), (snap) => {
+    callback(snap.docs.map(d => ({ ...d.data(), _fbId: d.id })));
+  });
 };
 
 const getNextId = (items) => items.reduce((maxId, item) => Math.max(maxId, Number(item.id) || 0), 0) + 1;
@@ -525,13 +647,9 @@ const formatCurrencyDisplay = (value) => {
 };
 
 const getInitialThemeMode = () => {
-  const savedThemeMode = loadStoredValue(STORAGE_KEYS.themeMode, null);
-  if (savedThemeMode === 'light' || savedThemeMode === 'dark-blue') {
-    return savedThemeMode;
-  }
-
-  const legacyDarkMode = loadStoredValue(STORAGE_KEYS.darkMode, false);
-  return legacyDarkMode ? 'dark-blue' : 'light';
+  const saved = loadStoredValue(STORAGE_KEYS.themeMode, null);
+  if (saved === 'light' || saved === 'dark-blue') return saved;
+  return loadStoredValue(STORAGE_KEYS.darkMode, false) ? 'dark-blue' : 'light';
 };
 
 const parseCsv = (text) => {
@@ -624,17 +742,12 @@ const categories = ['Food', 'Maintenance', 'Utilities', 'Miscellaneous'];
 const App = () => {
   const [themeMode, setThemeMode] = useState(getInitialThemeMode);
   const [currentUser, setCurrentUser] = useState(null);
-  const [dbLoading, setDbLoading] = useState(true);   // true while Firestore boot-load runs
-
-  // Initialise from localStorage immediately so the UI is never blank
-  const [users, setUsers] = useState(() => loadStoredValue(STORAGE_KEYS.users, initialUsers));
-  const [plants, setPlants] = useState(() => loadStoredValue(STORAGE_KEYS.plants, initialPlants));
-  const [guestHouses, setGuestHouses] = useState(() => loadStoredValue(STORAGE_KEYS.guestHouses, initialGuestHouses));
-  const [expenses, setExpenses] = useState(() => {
-    const storedExpenses = loadStoredValue(STORAGE_KEYS.expenses, initialExpenses);
-    const expenseRecords = Array.isArray(storedExpenses) ? storedExpenses : initialExpenses;
-    return expenseRecords.map(normalizeExpenseRecord);
-  });
+  const [users, setUsers] = useState([]);
+  const [plants, setPlants] = useState([]);
+  const [guestHouses, setGuestHouses] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [dbReady, setDbReady] = useState(false);   // true once Firebase data loaded
+  const [dbError, setDbError] = useState(null);     // holds error message if Firebase fails
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState('');
@@ -647,48 +760,7 @@ const App = () => {
   const [filterDateTo, setFilterDateTo] = useState('');
   const darkMode = themeMode === 'dark-blue';
 
-  // ── Boot: load live data from Firestore, override localStorage cache ────────
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [fbUsers, fbPlants, fbGuestHouses, fbExpenses] = await Promise.all([
-          window.firestoreLoad('users',       loadStoredValue(STORAGE_KEYS.users,       initialUsers)),
-          window.firestoreLoad('plants',      loadStoredValue(STORAGE_KEYS.plants,      initialPlants)),
-          window.firestoreLoad('guestHouses', loadStoredValue(STORAGE_KEYS.guestHouses, initialGuestHouses)),
-          window.firestoreLoad('expenses',    loadStoredValue(STORAGE_KEYS.expenses,    initialExpenses)),
-        ]);
-        if (cancelled) return;
-
-        // plants collection stores objects {id, name} — extract name strings
-        const plantNames = Array.isArray(fbPlants) && fbPlants.length > 0 && typeof fbPlants[0] === 'object'
-          ? fbPlants.map(p => p.name || p).filter(Boolean)
-          : (Array.isArray(fbPlants) ? fbPlants : initialPlants);
-
-        const normalizedExpenses = (Array.isArray(fbExpenses) ? fbExpenses : initialExpenses)
-          .map(normalizeExpenseRecord);
-
-        setUsers(Array.isArray(fbUsers) && fbUsers.length ? fbUsers : initialUsers);
-        setPlants(plantNames.length ? plantNames : initialPlants);
-        setGuestHouses(Array.isArray(fbGuestHouses) && fbGuestHouses.length ? fbGuestHouses : initialGuestHouses);
-        setExpenses(normalizedExpenses.length ? normalizedExpenses : initialExpenses.map(normalizeExpenseRecord));
-
-        // Also update localStorage cache with live data
-        saveStoredValue(STORAGE_KEYS.users,       fbUsers);
-        saveStoredValue(STORAGE_KEYS.plants,       plantNames);
-        saveStoredValue(STORAGE_KEYS.guestHouses,  fbGuestHouses);
-        saveStoredValue(STORAGE_KEYS.expenses,     normalizedExpenses);
-
-        console.log('[Firebase] Boot-load complete');
-      } catch (err) {
-        console.warn('[Firebase] Boot-load failed, using localStorage fallback:', err);
-      } finally {
-        if (!cancelled) setDbLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
+  // Theme — still local only (per-device preference)
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
     document.body.classList.toggle('dark', darkMode);
@@ -701,39 +773,88 @@ const App = () => {
     saveStoredValue(STORAGE_KEYS.darkMode, darkMode);
   }, [themeMode, darkMode]);
 
+  // ── Firebase: seed initial data if collections are empty, then listen ──────
   useEffect(() => {
-    if (dbLoading) return;   // don't write back until boot-load finishes
-    saveStoredValue(STORAGE_KEYS.users, users);
-    window.firestoreSave('users', users);
-  }, [users]);
+    if (!window._firebase) {
+      setDbError('Firebase not initialised. Check your firebaseConfig in the HTML file.');
+      return;
+    }
 
-  useEffect(() => {
-    if (dbLoading) return;
-    saveStoredValue(STORAGE_KEYS.plants, plants);
-    window.firestoreSave('plants', plants.map((p, i) => ({ id: i + 1, name: p })));
-  }, [plants]);
+    let unsubs = [];
 
-  useEffect(() => {
-    if (dbLoading) return;
-    saveStoredValue(STORAGE_KEYS.guestHouses, guestHouses);
-    window.firestoreSave('guestHouses', guestHouses);
-  }, [guestHouses]);
+    const bootstrap = async () => {
+      try {
+        // Seed users if empty
+        const existingUsers = await fbGetAll('users');
+        if (existingUsers.length === 0) {
+          for (const u of initialUsers) {
+            await fbSet('users', u.id, u);
+          }
+        }
+        // Seed plants if empty
+        const existingPlants = await fbGetAll('plants');
+        if (existingPlants.length === 0) {
+          for (const p of initialPlants) {
+            await fbSet('plants', p, { name: p });
+          }
+        }
+        // Seed guest houses if empty
+        const existingGH = await fbGetAll('guestHouses');
+        if (existingGH.length === 0) {
+          for (const gh of initialGuestHouses) {
+            await fbSet('guestHouses', gh.id, gh);
+          }
+        }
+        // Seed expenses if empty
+        const existingExp = await fbGetAll('expenses');
+        if (existingExp.length === 0) {
+          for (const e of initialExpenses) {
+            await fbSet('expenses', e.id, normalizeExpenseRecord(e));
+          }
+        }
 
-  useEffect(() => {
-    if (dbLoading) return;
-    saveStoredValue(STORAGE_KEYS.expenses, expenses);
-    window.firestoreSave('expenses', expenses);
-  }, [expenses]);
+        // Real-time listeners — update React state on any Firestore change
+        unsubs.push(fbListen('users', (docs) => {
+          setUsers(docs.map(d => ({ ...d, id: isNaN(d.id) ? d._fbId : Number(d.id) })));
+        }));
+        unsubs.push(fbListen('plants', (docs) => {
+          setPlants(docs.map(d => d.name).filter(Boolean).sort());
+        }));
+        unsubs.push(fbListen('guestHouses', (docs) => {
+          setGuestHouses(docs.map(d => ({ ...d, id: isNaN(d.id) ? d._fbId : Number(d.id) })));
+        }));
+        unsubs.push(fbListen('expenses', (docs) => {
+          setExpenses(docs.map(d => normalizeExpenseRecord({
+            ...d, id: isNaN(d.id) ? d._fbId : Number(d.id)
+          })));
+        }));
 
-  // Authentication
-  const handleLogin = (username, password) => {
-    const user = users.find(u => u.username === username && u.password === password);
-    if (user) {
-      setCurrentUser(user);
+        setDbReady(true);
+      } catch (err) {
+        console.error('Firebase bootstrap error:', err);
+        setDbError('Could not connect to Firebase: ' + err.message);
+      }
+    };
+
+    bootstrap();
+    return () => unsubs.forEach(u => u()); // cleanup listeners on unmount
+  }, []);
+
+  // ── Authentication ──────────────────────────────────────────────────────────
+  // Login: match username in Firestore users collection, then verify password
+  const handleLogin = async (username, password) => {
+    try {
+      // Find user document by username field
+      const allUsers = await fbGetAll('users');
+      const userDoc = allUsers.find(u => u.username === username && u.password === password);
+      if (!userDoc) return false;
+      setCurrentUser({ ...userDoc, id: isNaN(userDoc.id) ? userDoc._fbId : Number(userDoc.id) });
       setActiveTab('dashboard');
       return true;
+    } catch (err) {
+      console.error('Login error:', err);
+      return false;
     }
-    return false;
   };
 
   const handleLogout = () => {
@@ -757,16 +878,13 @@ const App = () => {
     setFormData({});
   };
 
-  const ensurePlantExists = (plantName) => {
+  const ensurePlantExists = async (plantName) => {
     const normalizedPlant = `${plantName ?? ''}`.trim();
-    if (!normalizedPlant) {
-      return '';
+    if (!normalizedPlant) return '';
+    if (!plants.includes(normalizedPlant)) {
+      try { await fbSet('plants', normalizedPlant, { name: normalizedPlant }); }
+      catch (err) { console.warn('Could not save plant:', err); }
     }
-
-    setPlants((currentPlants) => (
-      currentPlants.includes(normalizedPlant) ? currentPlants : [...currentPlants, normalizedPlant]
-    ));
-
     return normalizedPlant;
   };
 
@@ -812,120 +930,99 @@ const App = () => {
     });
   };
 
-  // CRUD Operations
-  const handleAddExpense = (data) => {
+  // ── CRUD Operations — all write to Firestore ────────────────────────────────
+  // Firestore real-time listeners above will automatically update React state.
+
+  const handleAddExpense = async (data) => {
     const expensePayload = buildExpensePayload(data);
-    if (!expensePayload) {
-      return;
-    }
-
-    setExpenses((currentExpenses) => [
-      ...currentExpenses,
-      { ...expensePayload, id: getNextId(currentExpenses), userId: currentUser.id },
-    ]);
-    closeModal();
+    if (!expensePayload) return;
+    const newId = getNextId(expenses);
+    const record = { ...expensePayload, id: newId, userId: currentUser.id };
+    try {
+      await fbSet('expenses', newId, record);
+      closeModal();
+    } catch (err) { window.alert('Save failed: ' + err.message); }
   };
 
-  const handleEditExpense = (data) => {
+  const handleEditExpense = async (data) => {
     const expensePayload = buildExpensePayload(data, selectedItem);
-    if (!expensePayload) {
-      return;
-    }
-
-    setExpenses((currentExpenses) => currentExpenses.map((expense) =>
-      expense.id === selectedItem.id ? expensePayload : expense
-    ));
-    closeModal();
+    if (!expensePayload) return;
+    try {
+      await fbSet('expenses', selectedItem.id, expensePayload);
+      closeModal();
+    } catch (err) { window.alert('Update failed: ' + err.message); }
   };
 
-  const handleDeleteExpense = (id) => {
-    setExpenses(expenses.filter(e => e.id !== id));
+  const handleDeleteExpense = async (id) => {
+    try { await fbDelete('expenses', id); }
+    catch (err) { window.alert('Delete failed: ' + err.message); }
   };
 
-  const handleAddUser = (data) => {
-    const newUser = {
-      id: getNextId(users),
-      ...data,
-    };
-    setUsers((currentUsers) => [...currentUsers, newUser]);
-    closeModal();
+  const handleAddUser = async (data) => {
+    const newId = getNextId(users);
+    const newUser = { id: newId, ...data };
+    try {
+      await fbSet('users', newId, newUser);
+      closeModal();
+    } catch (err) { window.alert('Save failed: ' + err.message); }
   };
 
-  const handleEditUser = (data) => {
-    setUsers(users.map(u => u.id === selectedItem.id ? { ...u, ...data } : u));
-    closeModal();
+  const handleEditUser = async (data) => {
+    const updated = { ...selectedItem, ...data };
+    try {
+      await fbSet('users', selectedItem.id, updated);
+      closeModal();
+    } catch (err) { window.alert('Update failed: ' + err.message); }
   };
 
-  const handleDeleteUser = (id) => {
-    setUsers(users.filter(u => u.id !== id));
+  const handleDeleteUser = async (id) => {
+    try { await fbDelete('users', id); }
+    catch (err) { window.alert('Delete failed: ' + err.message); }
   };
 
-  const handleAddGuestHouse = (data) => {
+  const handleAddGuestHouse = async (data) => {
     const name = `${data.name ?? ''}`.trim();
     const plant = `${data.plant ?? ''}`.trim();
-
-    if (!name || !plant) {
-      window.alert('Please provide both a guest house name and a plant.');
-      return;
-    }
-
-    const alreadyExists = guestHouses.some((guestHouse) => (
-      normalizeText(guestHouse.name) === normalizeText(name) &&
-      normalizeText(guestHouse.plant) === normalizeText(plant)
-    ));
-
-    if (alreadyExists) {
-      window.alert('A guest house with the same name already exists for this plant.');
-      return;
-    }
-
-    ensurePlantExists(plant);
-    setGuestHouses((currentGuestHouses) => [
-      ...currentGuestHouses,
-      { id: getNextId(currentGuestHouses), name, plant },
-    ]);
-    closeModal();
+    if (!name || !plant) { window.alert('Please provide both a guest house name and a plant.'); return; }
+    const alreadyExists = guestHouses.some(gh =>
+      normalizeText(gh.name) === normalizeText(name) &&
+      normalizeText(gh.plant) === normalizeText(plant)
+    );
+    if (alreadyExists) { window.alert('A guest house with the same name already exists for this plant.'); return; }
+    const newId = getNextId(guestHouses);
+    try {
+      await ensurePlantExists(plant);
+      await fbSet('guestHouses', newId, { id: newId, name, plant });
+      closeModal();
+    } catch (err) { window.alert('Save failed: ' + err.message); }
   };
 
-  const handleDeleteGuestHouse = (id) => {
+  const handleDeleteGuestHouse = async (id) => {
     const hasExpenses = expenses.some(e => e.guestHouseId === id);
-    if (hasExpenses) {
-      window.alert('Cannot delete this guest house because it has associated expense records. Please delete those expenses first.');
-      return;
-    }
-    if (window.confirm('Are you sure you want to delete this guest house? This action cannot be undone.')) {
-      setGuestHouses(guestHouses.filter(gh => gh.id !== id));
-    }
+    if (hasExpenses) { window.alert('Cannot delete this guest house because it has associated expense records. Please delete those expenses first.'); return; }
+    if (!window.confirm('Are you sure you want to delete this guest house? This action cannot be undone.')) return;
+    try { await fbDelete('guestHouses', id); }
+    catch (err) { window.alert('Delete failed: ' + err.message); }
   };
 
-  const handleEditGuestHouse = (data) => {
+  const handleEditGuestHouse = async (data) => {
     const name = `${data.name ?? ''}`.trim();
     const plant = `${data.plant ?? ''}`.trim();
-
-    if (!name || !plant) {
-      window.alert('Please provide both a guest house name and a plant.');
-      return;
-    }
-
-    const alreadyExists = guestHouses.some((guestHouse) => (
-      guestHouse.id !== selectedItem.id &&
-      normalizeText(guestHouse.name) === normalizeText(name) &&
-      normalizeText(guestHouse.plant) === normalizeText(plant)
-    ));
-
-    if (alreadyExists) {
-      window.alert('A guest house with the same name already exists for this plant.');
-      return;
-    }
-
-    ensurePlantExists(plant);
-    setGuestHouses(guestHouses.map(gh =>
-      gh.id === selectedItem.id ? { ...gh, name, plant } : gh
-    ));
-    setExpenses(expenses.map((expense) => (
-      expense.guestHouseId === selectedItem.id ? { ...expense, plant } : expense
-    )));
-    closeModal();
+    if (!name || !plant) { window.alert('Please provide both a guest house name and a plant.'); return; }
+    const alreadyExists = guestHouses.some(gh =>
+      gh.id !== selectedItem.id &&
+      normalizeText(gh.name) === normalizeText(name) &&
+      normalizeText(gh.plant) === normalizeText(plant)
+    );
+    if (alreadyExists) { window.alert('A guest house with the same name already exists for this plant.'); return; }
+    try {
+      await ensurePlantExists(plant);
+      await fbSet('guestHouses', selectedItem.id, { ...selectedItem, name, plant });
+      // Update plant field on all linked expenses
+      const linkedExpenses = expenses.filter(e => e.guestHouseId === selectedItem.id);
+      await Promise.all(linkedExpenses.map(e => fbSet('expenses', e.id, { ...e, plant })));
+      closeModal();
+    } catch (err) { window.alert('Update failed: ' + err.message); }
   };
 
   const handleBulkUploadExpenses = async (data) => {
@@ -1113,7 +1210,12 @@ const App = () => {
       return;
     }
 
-    setExpenses((currentExpenses) => [...currentExpenses, ...importedExpenses]);
+    try {
+      await Promise.all(importedExpenses.map(e => fbSet('expenses', e.id, e)));
+    } catch (err) {
+      window.alert('Import failed while saving to Firebase: ' + err.message);
+      return;
+    }
     closeModal();
 
     const skippedSummary = skippedRows.length > 0
@@ -1201,14 +1303,37 @@ const App = () => {
     return { total, byCategory, byPlant, byGuestHouse, count: filtered.length };
   };
 
-  // Show a loading overlay while Firestore data is being fetched on boot
-  if (dbLoading) {
+  // Show error if Firebase config is missing/wrong
+  if (dbError) {
     return (
-      <div className={`min-h-screen flex flex-col items-center justify-center gap-6 ${darkMode ? 'dark theme-dark-blue bg-slate-950' : 'bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100'}`}>
-        <PolyplasticsLogo />
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm font-semibold text-slate-600 dark:text-slate-400 animate-pulse">Connecting to database…</p>
+      <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full border border-red-200">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-3 bg-red-100 rounded-xl">
+              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+            </div>
+            <h2 className="text-xl font-bold text-red-700">Firebase Not Configured</h2>
+          </div>
+          <p className="text-slate-600 mb-4 text-sm leading-relaxed">{dbError}</p>
+          <div className="bg-slate-50 rounded-xl p-4 text-xs font-mono text-slate-700 space-y-1">
+            <p className="font-bold text-slate-900 mb-2 not-italic">Quick setup steps:</p>
+            <p>1. Go to console.firebase.google.com</p>
+            <p>2. Create project → Add Web App → copy config</p>
+            <p>3. Open this HTML file, search for YOUR_API_KEY and paste your config</p>
+            <p>4. In Firestore → Create database (start in test mode)</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show spinner while Firebase loads data
+  if (!dbReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-slate-600 font-medium">Connecting to database…</p>
         </div>
       </div>
     );
@@ -1244,7 +1369,14 @@ const App = () => {
                   <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{currentUser.name}</p>
                   <p className="text-xs text-slate-600 dark:text-slate-400">{currentUser.role} | {currentUser.plant}</p>
                 </div>
+                <div className="flex items-center gap-3">
+                {/* Firebase live indicator */}
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800" title="Connected to Firebase — data is shared live">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                  <span className="text-xs text-green-700 dark:text-green-400 font-medium hidden sm:inline">Live</span>
+                </div>
                 <ThemeSwitch darkMode={darkMode} setThemeMode={setThemeMode} />
+              </div>
                 <button
                   onClick={handleLogout}
                   className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium"
@@ -1403,18 +1535,45 @@ const App = () => {
 };
 
 // Login Screen
+const FirebaseSetupBanner = () => {
+  const isDefault = !window._firebase ||
+    (typeof window._firebase === 'object' && Object.keys(window._firebase).length === 0);
+  // Try to detect unconfigured state by checking if apiKey is still placeholder
+  const [unconfigured, setUnconfigured] = React.useState(false);
+  React.useEffect(() => {
+    try {
+      const app = window._firebase && window._firebase.db && window._firebase.db.app;
+      if (app && app.options && app.options.apiKey === 'YOUR_API_KEY') setUnconfigured(true);
+    } catch {}
+  }, []);
+  if (!unconfigured) return null;
+  return (
+    <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-xl text-sm text-amber-800 space-y-2">
+      <p className="font-bold flex items-center gap-2">
+        <span>⚠️</span> Firebase config not set — app is in demo mode
+      </p>
+      <p className="text-xs leading-relaxed">
+        Data entered here will NOT be shared with other users until you configure Firebase.
+        Open this HTML file and replace <code className="bg-amber-100 px-1 rounded">YOUR_API_KEY</code> with your real Firebase project config.
+      </p>
+    </div>
+  );
+};
+
 const LoginScreen = ({ onLogin, darkMode, setThemeMode }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (onLogin(username, password)) {
+    setError('Signing in…');
+    const ok = await onLogin(username, password);
+    if (ok) {
       setError('');
     } else {
-      setError('Invalid credentials');
+      setError('Invalid username or password.');
     }
   };
 
@@ -1486,8 +1645,9 @@ const LoginScreen = ({ onLogin, darkMode, setThemeMode }) => {
             </button>
           </form>
 
+          <FirebaseSetupBanner />
           <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
-            <p className="text-xs text-blue-800 dark:text-blue-300 font-semibold mb-2">Demo Credentials:</p>
+            <p className="text-xs text-blue-800 dark:text-blue-300 font-semibold mb-2">Default Credentials:</p>
             <div className="space-y-1 text-xs text-blue-700 dark:text-blue-400">
               <p>Admin: admin / admin123</p>
               <p>User: user1 / user123</p>
@@ -1740,119 +1900,51 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
         </ChartCard>
       </div>
 
-      {/* ── Block 1: Recent Expenses ── */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-blue-50 dark:bg-blue-900/20">
-          <div className="w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0" />
-          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Recent Expenses</h3>
-          <span className="ml-auto text-xs font-medium text-slate-500 dark:text-slate-400">Latest 10 records</span>
-        </div>
+      {/* Recent Transactions */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-lg border border-slate-200 dark:border-slate-800">
+        <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">Recent Transactions & Guest Stays</h3>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
-                <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Date</th>
+              <tr className="border-b border-slate-200 dark:border-slate-800">
+                <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Date</th>
                 {currentUser.role !== 'User' && (
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Plant</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Plant</th>
                 )}
-                <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Guest House</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Category</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Description</th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Amount</th>
+                <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Guest House</th>
+                <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Guest</th>
+                <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Stay</th>
+                <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Category</th>
+                <th className="text-right py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Amount</th>
+                <th className="text-right py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Payment Collected</th>
               </tr>
             </thead>
             <tbody>
               {applyFilters(expenses).slice(0, 10).map(expense => {
                 const gh = guestHouses.find(g => g.id === expense.guestHouseId);
                 return (
-                  <tr key={expense.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-colors">
-                    <td className="py-3 px-4 text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">{expense.date || '—'}</td>
+                  <tr key={expense.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <td className="py-3 px-4 text-sm text-slate-600 dark:text-slate-400">{expense.date}</td>
                     {currentUser.role !== 'User' && (
-                      <td className="py-3 px-4 text-sm text-slate-900 dark:text-slate-100 font-medium whitespace-nowrap">{expense.plant}</td>
+                      <td className="py-3 px-4 text-sm text-slate-900 dark:text-slate-100 font-medium">{expense.plant}</td>
                     )}
-                    <td className="py-3 px-4 text-sm text-slate-900 dark:text-slate-100 whitespace-nowrap">{gh?.name || '—'}</td>
+                    <td className="py-3 px-4 text-sm text-slate-900 dark:text-slate-100">{gh?.name}</td>
+                    <td className="py-3 px-4"><GuestInfoCell expense={expense} /></td>
+                    <td className="py-3 px-4"><StayDetailsCell expense={expense} /></td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getCategoryColor(expense.category)}`}>
                         {expense.category}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-sm text-slate-500 dark:text-slate-400 max-w-[180px] truncate">{expense.description || '—'}</td>
-                    <td className="py-3 px-4 text-sm font-bold text-blue-700 dark:text-blue-300 text-right whitespace-nowrap">
+                    <td className="py-3 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 text-right">
                       ₹{expense.amount.toLocaleString('en-IN')}
+                    </td>
+                    <td className="py-3 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 text-right">
+                      {formatCurrencyDisplay(expense.paymentCollected)}
                     </td>
                   </tr>
                 );
               })}
-              {applyFilters(expenses).length === 0 && (
-                <tr><td colSpan={currentUser.role !== 'User' ? 6 : 5} className="py-10 text-center text-sm text-slate-400 dark:text-slate-500">No expense records found.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ── Block 2: Payment Collections ── */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-emerald-50 dark:bg-emerald-900/20">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
-          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Payment Collections</h3>
-          <span className="ml-auto text-xs font-medium text-slate-500 dark:text-slate-400">Guest-wise payments received</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
-                <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Guest Name</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Designation / Dept</th>
-                {currentUser.role !== 'User' && (
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Plant</th>
-                )}
-                <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Guest House</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Check-In</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Check-Out</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Visited From</th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Payment Collected</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(() => {
-                const paymentRows = applyFilters(expenses).filter(e => e.guestName && e.guestName.trim() !== '').slice(0, 10);
-                if (paymentRows.length === 0) return (
-                  <tr><td colSpan={currentUser.role !== 'User' ? 8 : 7} className="py-10 text-center text-sm text-slate-400 dark:text-slate-500">No guest payment records found.</td></tr>
-                );
-                return paymentRows.map(expense => {
-                  const gh = guestHouses.find(g => g.id === expense.guestHouseId);
-                  const hasPayment = expense.paymentCollected !== '' && expense.paymentCollected !== null && expense.paymentCollected !== undefined && Number(expense.paymentCollected) > 0;
-                  return (
-                    <tr key={expense.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-emerald-50/40 dark:hover:bg-emerald-900/10 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{expense.guestName}</div>
-                        {expense.guestMobile && <div className="text-xs text-slate-400 dark:text-slate-500">{expense.guestMobile}</div>}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="text-sm text-slate-700 dark:text-slate-300">{expense.guestDesignation || '—'}</div>
-                        {expense.guestDepartment && <div className="text-xs text-slate-400 dark:text-slate-500">{expense.guestDepartment}</div>}
-                      </td>
-                      {currentUser.role !== 'User' && (
-                        <td className="py-3 px-4 text-sm text-slate-900 dark:text-slate-100 font-medium whitespace-nowrap">{expense.plant}</td>
-                      )}
-                      <td className="py-3 px-4 text-sm text-slate-900 dark:text-slate-100 whitespace-nowrap">{gh?.name || '—'}</td>
-                      <td className="py-3 px-4 text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                        {expense.checkInDate ? `${expense.checkInDate}${expense.checkInTime ? ' ' + expense.checkInTime : ''}` : '—'}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                        {expense.checkOutDate ? `${expense.checkOutDate}${expense.checkOutTime ? ' ' + expense.checkOutTime : ''}` : '—'}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{expense.visitedFrom || '—'}</td>
-                      <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <span className={`text-sm font-bold ${hasPayment ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                          {hasPayment ? `₹${Number(expense.paymentCollected).toLocaleString('en-IN')}` : '—'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                });
-              })()}
             </tbody>
           </table>
         </div>
@@ -2361,7 +2453,6 @@ const BulkUploadExpensesForm = ({ formData, handleChange }) => {
 
 const Modal = ({ type, data, guestHouses, plants, onClose, onSubmit }) => {
   const [formData, setFormData] = useState(data || {});
-  const [expenseTab, setExpenseTab] = useState('expense');
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -2406,249 +2497,212 @@ const Modal = ({ type, data, guestHouses, plants, onClose, onSubmit }) => {
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {(type === 'addExpense' || type === 'editExpense') && (
             <>
-              {/* Tab bar */}
-              <div className="flex border-b border-slate-200 dark:border-slate-700 mb-4 -mt-1">
-                <button
-                  type="button"
-                  onClick={() => setExpenseTab('expense')}
-                  className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
-                    expenseTab === 'expense'
-                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                      : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-                  }`}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Guest House
+                </label>
+                <select
+                  value={formData.guestHouseId || ''}
+                  onChange={(e) => handleChange('guestHouseId', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                  required
                 >
-                  Expense Details
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setExpenseTab('payment')}
-                  className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
-                    expenseTab === 'payment'
-                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                      : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-                  }`}
-                >
-                  Payment Collection
-                </button>
+                  <option value="">Select Guest House</option>
+                  {guestHouses.map(gh => (
+                    <option key={gh.id} value={gh.id}>{gh.name} ({gh.plant})</option>
+                  ))}
+                </select>
               </div>
-
-              {/* ── Tab 1: Expense Details ── */}
-              {expenseTab === 'expense' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                      Guest House
-                    </label>
-                    <select
-                      value={formData.guestHouseId || ''}
-                      onChange={(e) => handleChange('guestHouseId', e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                      required
-                    >
-                      <option value="">Select Guest House</option>
-                      {guestHouses.map(gh => (
-                        <option key={gh.id} value={gh.id}>{gh.name} ({gh.plant})</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                      Category
-                    </label>
-                    <select
-                      value={formData.category || ''}
-                      onChange={(e) => handleChange('category', e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                      required
-                    >
-                      <option value="">Select Category</option>
-                      {categories.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                      Amount (₹)
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.amount || ''}
-                      onChange={(e) => handleChange('amount', e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                      placeholder="0.00"
-                      step="0.01"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                      Date
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.date || ''}
-                      onChange={(e) => handleChange('date', e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                      Description
-                    </label>
-                    <textarea
-                      value={formData.description || ''}
-                      onChange={(e) => handleChange('description', e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 resize-none"
-                      rows="3"
-                      placeholder="Enter description..."
-                      required
-                    />
-                  </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Category
+                </label>
+                <select
+                  value={formData.category || ''}
+                  onChange={(e) => handleChange('category', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="">Select Category</option>
+                  {categories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Amount (₹)
+                </label>
+                <input
+                  type="number"
+                  value={formData.amount || ''}
+                  onChange={(e) => handleChange('amount', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                  step="0.01"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  value={formData.date || ''}
+                  onChange={(e) => handleChange('date', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Guest Name
+                </label>
+                <input
+                  type="text"
+                  value={formData.guestName ?? formData.guestDetails ?? ''}
+                  onChange={(e) => handleChange('guestName', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                  placeholder="Guest full name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Mobile No
+                </label>
+                <input
+                  type="tel"
+                  value={formData.guestMobile ?? ''}
+                  onChange={(e) => handleChange('guestMobile', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                  placeholder="Guest mobile number"
+                  maxLength="15"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Designation
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.guestDesignation ?? ''}
+                    onChange={(e) => handleChange('guestDesignation', e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                    placeholder="Manager / Engineer / Executive"
+                  />
                 </div>
-              )}
-
-              {/* ── Tab 2: Payment Collection ── */}
-              {expenseTab === 'payment' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                      Payment Collected From Guest (₹)
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.paymentCollected ?? ''}
-                      onChange={(e) => handleChange('paymentCollected', e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                      placeholder="0.00"
-                      step="0.01"
-                      min="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                      Guest Name
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.guestName ?? formData.guestDetails ?? ''}
-                      onChange={(e) => handleChange('guestName', e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                      placeholder="Guest full name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                      Mobile No
-                    </label>
-                    <input
-                      type="tel"
-                      value={formData.guestMobile ?? ''}
-                      onChange={(e) => handleChange('guestMobile', e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                      placeholder="Guest mobile number"
-                      maxLength="15"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                        Designation
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.guestDesignation ?? ''}
-                        onChange={(e) => handleChange('guestDesignation', e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                        placeholder="Manager / Engineer / Executive"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                        Department
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.guestDepartment ?? ''}
-                        onChange={(e) => handleChange('guestDepartment', e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                        placeholder="Finance / HR / Production"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                        Check-In Date
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.checkInDate ?? ''}
-                        onChange={(e) => handleChange('checkInDate', e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                        Check-In Time
-                      </label>
-                      <input
-                        type="time"
-                        value={formData.checkInTime ?? ''}
-                        onChange={(e) => handleChange('checkInTime', e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                        Check-Out Date
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.checkOutDate ?? ''}
-                        onChange={(e) => handleChange('checkOutDate', e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                        Check-Out Time
-                      </label>
-                      <input
-                        type="time"
-                        value={formData.checkOutTime ?? ''}
-                        onChange={(e) => handleChange('checkOutTime', e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                        Visited From Location
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.visitedFrom ?? ''}
-                        onChange={(e) => handleChange('visitedFrom', e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                        placeholder="Mumbai"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                        Caretaker Name
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.caretakerName ?? ''}
-                        onChange={(e) => handleChange('caretakerName', e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                        placeholder="Ramesh"
-                      />
-                    </div>
-                  </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Department
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.guestDepartment ?? ''}
+                    onChange={(e) => handleChange('guestDepartment', e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                    placeholder="Finance / HR / Production"
+                  />
                 </div>
-              )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Check-In Date
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.checkInDate ?? ''}
+                    onChange={(e) => handleChange('checkInDate', e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Check-In Time
+                  </label>
+                  <input
+                    type="time"
+                    value={formData.checkInTime ?? ''}
+                    onChange={(e) => handleChange('checkInTime', e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Check-Out Date
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.checkOutDate ?? ''}
+                    onChange={(e) => handleChange('checkOutDate', e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Check-Out Time
+                  </label>
+                  <input
+                    type="time"
+                    value={formData.checkOutTime ?? ''}
+                    onChange={(e) => handleChange('checkOutTime', e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Visited From Location
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.visitedFrom ?? ''}
+                    onChange={(e) => handleChange('visitedFrom', e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                    placeholder="Mumbai"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    Caretaker Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.caretakerName ?? ''}
+                    onChange={(e) => handleChange('caretakerName', e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ramesh"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Payment Collected From Guest (₹)
+                </label>
+                <input
+                  type="number"
+                  value={formData.paymentCollected ?? ''}
+                  onChange={(e) => handleChange('paymentCollected', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                  step="0.01"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={formData.description || ''}
+                  onChange={(e) => handleChange('description', e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 resize-none"
+                  rows="3"
+                  placeholder="Enter description..."
+                  required
+                />
+              </div>
             </>
           )}
 
@@ -3326,3 +3380,53 @@ root.render(<App />);
   </script>
 </body>
 </html>
+<!--
+╔══════════════════════════════════════════════════════════════════════╗
+║              FIREBASE SETUP GUIDE — READ BEFORE DEPLOYING           ║
+╠══════════════════════════════════════════════════════════════════════╣
+║                                                                      ║
+║  STEP 1 — Create Firebase project                                    ║
+║    • Go to: console.firebase.google.com                              ║
+║    • Click "Add project" → give it a name → Continue                ║
+║                                                                      ║
+║  STEP 2 — Register your web app                                      ║
+║    • In project overview → click </> (Web) icon                      ║
+║    • Copy the firebaseConfig object                                   ║
+║    • Paste it into this HTML file (search: YOUR_API_KEY)             ║
+║                                                                      ║
+║  STEP 3 — Enable Firestore                                           ║
+║    • Build → Firestore Database → Create database                    ║
+║    • Choose "Start in test mode" (good for 30 days)                  ║
+║    • After testing, set production rules below                       ║
+║                                                                      ║
+║  STEP 4 — Firestore Security Rules (paste in Firebase console)       ║
+║  ┌──────────────────────────────────────────────────────────────┐   ║
+║  │ rules_version = '2';                                          │   ║
+║  │ service cloud.firestore {                                     │   ║
+║  │   match /databases/{database}/documents {                     │   ║
+║  │     // Allow read/write only if request comes from your domain│   ║
+║  │     match /{document=**} {                                    │   ║
+║  │       allow read, write: if true; // CHANGE FOR PRODUCTION    │   ║
+║  │     }                                                         │   ║
+║  │   }                                                           │   ║
+║  │ }                                                             │   ║
+║  └──────────────────────────────────────────────────────────────┘   ║
+║                                                                      ║
+║  STEP 5 — Deploy to GitHub Pages                                     ║
+║    • Push this index.html to your GitHub repo                        ║
+║    • Settings → Pages → Source: main branch / root                   ║
+║    • Your app will be live at: username.github.io/repo-name          ║
+║                                                                      ║
+║  COLLECTIONS CREATED IN FIRESTORE:                                   ║
+║    • users       — user accounts (id, username, password, role…)     ║
+║    • plants      — plant names (id = plant name, name field)         ║
+║    • guestHouses — guest house records (id, name, plant)             ║
+║    • expenses    — expense records (all fields)                      ║
+║                                                                      ║
+║  DATA SAFETY DURING HTML UPDATES:                                    ║
+║    • All data lives in Firestore — untouched when you update HTML    ║
+║    • Just push new index.html to GitHub — data is always safe        ║
+║    • No migration needed unless you rename Firestore fields          ║
+║                                                                      ║
+╚══════════════════════════════════════════════════════════════════════╝
+-->
