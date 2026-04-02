@@ -1067,17 +1067,9 @@ const App = () => {
       paymentCollected: headers.findIndex((header) => ['payment collected from guest', 'payment collected', 'guest payment', 'payment received from guest'].includes(header)),
     };
 
-    const missingColumns = [
-      ['Date', columnIndex.date],
-      ['Guest House', columnIndex.guestHouse],
-      ['Category', columnIndex.category],
-      ['Amount', columnIndex.amount],
-    ]
-      .filter(([, index]) => index === -1)
-      .map(([label]) => label);
-
-    if (missingColumns.length > 0) {
-      window.alert(`Missing required column(s): ${missingColumns.join(', ')}.`);
+    // No mandatory columns — all fields are optional except Guest House (needed for lookup)
+    if (columnIndex.guestHouse === -1) {
+      window.alert('Missing required column: Guest House (needed to match records).');
       return;
     }
 
@@ -1111,26 +1103,35 @@ const App = () => {
       const guestMobile = getValue(columnIndex.guestMobile);
       const paymentCollectedInput = getValue(columnIndex.paymentCollected);
 
-      if (!date || !guestHouseName || !categoryInput || !amountInput) {
-        skippedRows.push(`Line ${lineNumber}: one or more required values are missing.`);
+      // Only skip rows with no guest house (required for lookup)
+      if (!guestHouseName) {
+        skippedRows.push(`Line ${lineNumber}: Guest House is missing — row skipped.`);
         return;
       }
 
-      if (!/^\d{2}-\d{2}-\d{4}$/.test(date)) {
-        skippedRows.push(`Line ${lineNumber}: date must be in DD-MM-YYYY format.`);
-        return;
-      }
-      const [dd, mm, yyyy] = date.split('-');
-      const dateISO = `${yyyy}-${mm}-${dd}`;
-
-      const category = categories.find((item) => normalizeText(item) === normalizeText(categoryInput));
-      if (!category) {
-        skippedRows.push(`Line ${lineNumber}: category "${categoryInput}" is not supported.`);
-        return;
+      // Date — optional; if provided must be DD-MM-YYYY
+      let dateISO = '';
+      if (date) {
+        if (!/^\d{2}-\d{2}-\d{4}$/.test(date)) {
+          skippedRows.push(`Line ${lineNumber}: date must be in DD-MM-YYYY format.`);
+          return;
+        }
+        const [dd, mm, yyyy] = date.split('-');
+        dateISO = `${yyyy}-${mm}-${dd}`;
       }
 
-      const amount = Number(amountInput);
-      if (!Number.isFinite(amount) || amount <= 0) {
+      // Category — optional; if provided must match a known category
+      const category = categoryInput
+        ? (categories.find((item) => normalizeText(item) === normalizeText(categoryInput)) || (() => {
+            skippedRows.push(`Line ${lineNumber}: category "${categoryInput}" is not supported.`);
+            return null;
+          })())
+        : '';
+      if (categoryInput && !category) return;
+
+      // Amount — optional; defaults to 0
+      const amount = amountInput ? Number(amountInput) : 0;
+      if (amountInput && (!Number.isFinite(amount) || amount < 0)) {
         skippedRows.push(`Line ${lineNumber}: amount "${amountInput}" is invalid.`);
         return;
       }
@@ -1157,7 +1158,7 @@ const App = () => {
         return;
       }
 
-      const paymentCollected = parseOptionalAmount(paymentCollectedInput);
+      const paymentCollected = paymentCollectedInput ? parseOptionalAmount(paymentCollectedInput) : 0;
       if (paymentCollected === null || paymentCollected < 0) {
         skippedRows.push(`Line ${lineNumber}: payment collected "${paymentCollectedInput}" is invalid.`);
         return;
@@ -1300,7 +1301,9 @@ const App = () => {
         amount: filtered.filter(e => e.guestHouseId === gh.id).reduce((sum, e) => sum + e.amount, 0)
       }));
 
-    return { total, byCategory, byPlant, byGuestHouse, count: filtered.length };
+    const totalPaymentCollected = filtered.reduce((sum, e) => sum + (Number(e.paymentCollected) || 0), 0);
+    const netExpense = total - totalPaymentCollected;
+    return { total, totalPaymentCollected, netExpense, byCategory, byPlant, byGuestHouse, count: filtered.length };
   };
 
   // Show error if Firebase config is missing/wrong
@@ -1848,7 +1851,7 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <StatCard
           title="Total Expenses"
           value={`₹${stats.total.toLocaleString('en-IN')}`}
@@ -1857,10 +1860,24 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
           darkMode={darkMode}
         />
         <StatCard
+          title="Payment Collected"
+          value={`₹${stats.totalPaymentCollected.toLocaleString('en-IN')}`}
+          icon={<TrendingUp className="w-8 h-8" />}
+          color="emerald"
+          darkMode={darkMode}
+        />
+        <StatCard
+          title="Net Expense"
+          value={`₹${stats.netExpense.toLocaleString('en-IN')}`}
+          icon={<BarChart3 className="w-8 h-8" />}
+          color="amber"
+          darkMode={darkMode}
+        />
+        <StatCard
           title="Total Transactions"
           value={stats.count}
           icon={<TrendingUp className="w-8 h-8" />}
-          color="emerald"
+          color="purple"
           darkMode={darkMode}
         />
         <StatCard
@@ -1874,7 +1891,7 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
           title="Average/Transaction"
           value={`₹${stats.count > 0 ? Math.round(stats.total / stats.count).toLocaleString('en-IN') : 0}`}
           icon={<BarChart3 className="w-8 h-8" />}
-          color="amber"
+          color="blue"
           darkMode={darkMode}
         />
       </div>
