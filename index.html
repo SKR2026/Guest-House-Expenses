@@ -442,6 +442,13 @@ const Filter = createIcon(
   </>
 );
 
+const Search = createIcon(
+  <>
+    <circle cx="11" cy="11" r="8" />
+    <path d="m21 21-4.35-4.35" />
+  </>
+);
+
 const ChevronDown = createIcon(
   <path d="m6 9 6 6 6-6" />
 );
@@ -1067,9 +1074,17 @@ const App = () => {
       paymentCollected: headers.findIndex((header) => ['payment collected from guest', 'payment collected', 'guest payment', 'payment received from guest'].includes(header)),
     };
 
-    // No mandatory columns — all fields are optional except Guest House (needed for lookup)
-    if (columnIndex.guestHouse === -1) {
-      window.alert('Missing required column: Guest House (needed to match records).');
+    const missingColumns = [
+      ['Date', columnIndex.date],
+      ['Guest House', columnIndex.guestHouse],
+      ['Category', columnIndex.category],
+      ['Amount', columnIndex.amount],
+    ]
+      .filter(([, index]) => index === -1)
+      .map(([label]) => label);
+
+    if (missingColumns.length > 0) {
+      window.alert(`Missing required column(s): ${missingColumns.join(', ')}.`);
       return;
     }
 
@@ -1103,35 +1118,26 @@ const App = () => {
       const guestMobile = getValue(columnIndex.guestMobile);
       const paymentCollectedInput = getValue(columnIndex.paymentCollected);
 
-      // Only skip rows with no guest house (required for lookup)
-      if (!guestHouseName) {
-        skippedRows.push(`Line ${lineNumber}: Guest House is missing — row skipped.`);
+      if (!date || !guestHouseName || !categoryInput || !amountInput) {
+        skippedRows.push(`Line ${lineNumber}: one or more required values are missing.`);
         return;
       }
 
-      // Date — optional; if provided must be DD-MM-YYYY
-      let dateISO = '';
-      if (date) {
-        if (!/^\d{2}-\d{2}-\d{4}$/.test(date)) {
-          skippedRows.push(`Line ${lineNumber}: date must be in DD-MM-YYYY format.`);
-          return;
-        }
-        const [dd, mm, yyyy] = date.split('-');
-        dateISO = `${yyyy}-${mm}-${dd}`;
+      if (!/^\d{2}-\d{2}-\d{4}$/.test(date)) {
+        skippedRows.push(`Line ${lineNumber}: date must be in DD-MM-YYYY format.`);
+        return;
+      }
+      const [dd, mm, yyyy] = date.split('-');
+      const dateISO = `${yyyy}-${mm}-${dd}`;
+
+      const category = categories.find((item) => normalizeText(item) === normalizeText(categoryInput));
+      if (!category) {
+        skippedRows.push(`Line ${lineNumber}: category "${categoryInput}" is not supported.`);
+        return;
       }
 
-      // Category — optional; if provided must match a known category
-      const category = categoryInput
-        ? (categories.find((item) => normalizeText(item) === normalizeText(categoryInput)) || (() => {
-            skippedRows.push(`Line ${lineNumber}: category "${categoryInput}" is not supported.`);
-            return null;
-          })())
-        : '';
-      if (categoryInput && !category) return;
-
-      // Amount — optional; defaults to 0
-      const amount = amountInput ? Number(amountInput) : 0;
-      if (amountInput && (!Number.isFinite(amount) || amount < 0)) {
+      const amount = Number(amountInput);
+      if (!Number.isFinite(amount) || amount <= 0) {
         skippedRows.push(`Line ${lineNumber}: amount "${amountInput}" is invalid.`);
         return;
       }
@@ -1158,7 +1164,7 @@ const App = () => {
         return;
       }
 
-      const paymentCollected = paymentCollectedInput ? parseOptionalAmount(paymentCollectedInput) : 0;
+      const paymentCollected = parseOptionalAmount(paymentCollectedInput);
       if (paymentCollected === null || paymentCollected < 0) {
         skippedRows.push(`Line ${lineNumber}: payment collected "${paymentCollectedInput}" is invalid.`);
         return;
@@ -1850,7 +1856,7 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards — 6 blocks in 2 rows of 3 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <StatCard
           title="Total Expenses"
@@ -1888,7 +1894,7 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
           darkMode={darkMode}
         />
         <StatCard
-          title="Average/Transaction"
+          title="Avg / Transaction"
           value={`₹${stats.count > 0 ? Math.round(stats.total / stats.count).toLocaleString('en-IN') : 0}`}
           icon={<BarChart3 className="w-8 h-8" />}
           color="blue"
@@ -1972,7 +1978,12 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
 
 // Expenses View
 const ExpensesView = ({ expenses, guestHouses, currentUser, onAdd, onBulkUpload, onEdit, onDelete, filterPlant, setFilterPlant, filterGuestHouse, setFilterGuestHouse, filterCategory, setFilterCategory, plants, applyFilters, handleExport, handleExportGuestList }) => {
-  const filtered = applyFilters(expenses);
+  const [guestSearch, setGuestSearch] = React.useState('');
+  const filtered = applyFilters(expenses).filter(e => {
+    if (!guestSearch.trim()) return true;
+    const q = guestSearch.trim().toLowerCase();
+    return (e.guestName || '').toLowerCase().includes(q);
+  });
 
   return (
     <div className="space-y-6">
@@ -2019,12 +2030,31 @@ const ExpensesView = ({ expenses, guestHouses, currentUser, onAdd, onBulkUpload,
           <Filter className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Filters</h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Guest Name Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
+            <input
+              type="text"
+              value={guestSearch}
+              onChange={(e) => setGuestSearch(e.target.value)}
+              placeholder="Search guest name…"
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+            {guestSearch && (
+              <button
+                onClick={() => setGuestSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
           {currentUser.role !== 'User' && (
             <select
               value={filterPlant}
               onChange={(e) => setFilterPlant(e.target.value)}
-              className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 text-sm"
             >
               <option value="All">All Plants</option>
               {plants.map(plant => (
@@ -2035,7 +2065,7 @@ const ExpensesView = ({ expenses, guestHouses, currentUser, onAdd, onBulkUpload,
           <select
             value={filterGuestHouse}
             onChange={(e) => setFilterGuestHouse(e.target.value)}
-            className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+            className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 text-sm"
           >
             <option value="All">All Guest Houses</option>
             {guestHouses.map(gh => (
@@ -2045,7 +2075,7 @@ const ExpensesView = ({ expenses, guestHouses, currentUser, onAdd, onBulkUpload,
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+            className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 text-sm"
           >
             <option value="All">All Categories</option>
             {categories.map(cat => (
