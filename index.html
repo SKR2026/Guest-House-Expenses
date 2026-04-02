@@ -1214,6 +1214,7 @@ const App = () => {
             <UsersView
               users={users}
               plants={plants}
+              currentUser={currentUser}
               onAdd={() => openModal('addUser')}
               onEdit={(user) => openModal('editUser', user, user)}
               onDelete={handleDeleteUser}
@@ -1783,12 +1784,14 @@ const ExpensesView = ({ expenses, guestHouses, currentUser, onAdd, onBulkUpload,
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => onDelete(expense.id)}
-                          className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {currentUser.role === 'Super Admin' && (
+                          <button
+                            onClick={() => onDelete(expense.id)}
+                            className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1803,7 +1806,7 @@ const ExpensesView = ({ expenses, guestHouses, currentUser, onAdd, onBulkUpload,
 };
 
 // Users View
-const UsersView = ({ users, plants, onAdd, onEdit, onDelete }) => {
+const UsersView = ({ users, plants, currentUser, onAdd, onEdit, onDelete }) => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -1851,12 +1854,14 @@ const UsersView = ({ users, plants, onAdd, onEdit, onDelete }) => {
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => onDelete(user.id)}
-                        className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {currentUser.role === 'Super Admin' && (
+                        <button
+                          onClick={() => onDelete(user.id)}
+                          className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -1905,12 +1910,14 @@ const GuestHousesView = ({ guestHouses, currentUser, onAdd, onEdit, onDelete }) 
                 <Home className="w-6 h-6 text-white" />
               </div>
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => onEdit(gh)}
-                  className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg transition-colors"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
+                {isSuperAdmin && (
+                  <button
+                    onClick={() => onEdit(gh)}
+                    className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                )}
                 {isSuperAdmin && (
                   <button
                     onClick={() => onDelete(gh.id)}
