@@ -112,6 +112,195 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+  <!-- ═══════════════════════════════════════════════════════════════
+       FIREBASE CONFIGURATION — managed via in-app Settings UI
+       You do NOT need to edit this file manually.
+       Click the ⚙️ Settings button that appears on the loading screen.
+       ═══════════════════════════════════════════════════════════════ -->
+
+  <!-- Firebase Settings UI (shown before React mounts if config missing) -->
+  <style>
+    #fb-setup-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 9999;
+      background: linear-gradient(135deg, #020817 0%, #0b224a 50%, #123975 100%);
+      font-family: system-ui, -apple-system, sans-serif;
+      overflow-y: auto;
+    }
+    #fb-setup-overlay.visible { display: flex; align-items: flex-start; justify-content: center; padding: 24px 16px; }
+    .fb-card {
+      background: rgba(7,21,45,0.96); border: 1px solid rgba(96,165,250,0.25);
+      border-radius: 16px; padding: 32px; width: 100%; max-width: 520px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.5); margin: auto;
+    }
+    .fb-card h1 { color:#e0ecff; font-size:1.4rem; font-weight:700; margin:0 0 4px; }
+    .fb-card .subtitle { color:#92a7d0; font-size:0.85rem; margin:0 0 24px; }
+    .fb-card label { display:block; color:#bfd2ff; font-size:0.8rem; font-weight:600; margin-bottom:4px; margin-top:14px; letter-spacing:.03em; }
+    .fb-card input {
+      width:100%; box-sizing:border-box; background:rgba(18,41,84,0.9);
+      border:1px solid rgba(96,165,250,0.2); border-radius:8px;
+      color:#e0ecff; font-size:0.85rem; padding:9px 12px; outline:none;
+      transition: border-color .2s;
+    }
+    .fb-card input:focus { border-color:rgba(96,165,250,0.6); }
+    .fb-card input::placeholder { color:#4a6a9a; }
+    .fb-btn {
+      margin-top:20px; width:100%; padding:11px; border:none; border-radius:8px;
+      background:linear-gradient(135deg,#2563eb,#0ea5e9); color:#fff;
+      font-size:0.9rem; font-weight:700; cursor:pointer; transition: opacity .2s;
+    }
+    .fb-btn:hover { opacity:.88; }
+    .fb-btn-clear {
+      margin-top:8px; width:100%; padding:8px; border:1px solid rgba(96,165,250,0.2);
+      border-radius:8px; background:transparent; color:#92a7d0;
+      font-size:0.8rem; cursor:pointer; transition: border-color .2s;
+    }
+    .fb-btn-clear:hover { border-color:rgba(96,165,250,0.5); color:#bfd2ff; }
+    .fb-err { color:#f87171; font-size:0.8rem; margin-top:10px; display:none; }
+    .fb-steps {
+      background:rgba(18,41,84,0.6); border:1px solid rgba(96,165,250,0.15);
+      border-radius:10px; padding:14px 16px; margin-bottom:22px;
+    }
+    .fb-steps p { color:#92a7d0; font-size:0.78rem; margin:0 0 6px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+    .fb-steps ol { color:#bfd2ff; font-size:0.8rem; margin:0; padding-left:18px; line-height:1.8; }
+    .fb-steps a { color:#60a5fa; }
+    .fb-badge { display:inline-block; background:rgba(37,99,235,0.3); color:#93c5fd; border-radius:6px; padding:2px 8px; font-size:0.72rem; font-weight:600; margin-bottom:12px; }
+  </style>
+
+  <div id="fb-setup-overlay">
+    <div class="fb-card">
+      <span class="fb-badge">⚙️ Firebase Setup Required</span>
+      <h1>Connect Your Database</h1>
+      <p class="subtitle">Enter your Firebase project credentials to get started. These are saved locally on your device.</p>
+
+      <div class="fb-steps">
+        <p>How to get your config</p>
+        <ol>
+          <li>Go to <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a></li>
+          <li>Create / open your project → <strong>Project Settings</strong></li>
+          <li>Under <em>Your apps</em> → click <strong>&lt;/&gt; Web</strong> → register app</li>
+          <li>Copy the values from <code>firebaseConfig</code> into the fields below</li>
+          <li>Enable <strong>Firestore Database</strong> (test mode) &amp; <strong>Email/Password Auth</strong></li>
+        </ol>
+      </div>
+
+      <label>API Key <span style="color:#60a5fa">*</span></label>
+      <input id="fb-apiKey" placeholder="AIzaSy..." />
+
+      <label>Auth Domain <span style="color:#60a5fa">*</span></label>
+      <input id="fb-authDomain" placeholder="your-project.firebaseapp.com" />
+
+      <label>Project ID <span style="color:#60a5fa">*</span></label>
+      <input id="fb-projectId" placeholder="your-project-id" />
+
+      <label>Storage Bucket</label>
+      <input id="fb-storageBucket" placeholder="your-project.appspot.com" />
+
+      <label>Messaging Sender ID</label>
+      <input id="fb-messagingSenderId" placeholder="123456789" />
+
+      <label>App ID <span style="color:#60a5fa">*</span></label>
+      <input id="fb-appId" placeholder="1:123456789:web:abc..." />
+
+      <div class="fb-err" id="fb-err-msg"></div>
+
+      <button class="fb-btn" onclick="saveFirebaseConfig()">💾 Save &amp; Connect</button>
+      <button class="fb-btn-clear" onclick="clearFirebaseConfig()">🗑 Clear saved config</button>
+    </div>
+  </div>
+
+  <script>
+    // ── Helpers to persist Firebase config in localStorage ───────────
+    var FB_STORAGE_KEY = 'guestHouseApp_firebaseConfig';
+
+    function getSavedConfig() {
+      try { return JSON.parse(localStorage.getItem(FB_STORAGE_KEY) || 'null'); }
+      catch(e) { return null; }
+    }
+
+    function saveFirebaseConfig() {
+      var cfg = {
+        apiKey:            document.getElementById('fb-apiKey').value.trim(),
+        authDomain:        document.getElementById('fb-authDomain').value.trim(),
+        projectId:         document.getElementById('fb-projectId').value.trim(),
+        storageBucket:     document.getElementById('fb-storageBucket').value.trim(),
+        messagingSenderId: document.getElementById('fb-messagingSenderId').value.trim(),
+        appId:             document.getElementById('fb-appId').value.trim(),
+      };
+      var err = document.getElementById('fb-err-msg');
+      if (!cfg.apiKey || !cfg.authDomain || !cfg.projectId || !cfg.appId) {
+        err.style.display = 'block';
+        err.textContent = '⚠️ API Key, Auth Domain, Project ID and App ID are required.';
+        return;
+      }
+      err.style.display = 'none';
+      localStorage.setItem(FB_STORAGE_KEY, JSON.stringify(cfg));
+      window.location.reload();
+    }
+
+    function clearFirebaseConfig() {
+      localStorage.removeItem(FB_STORAGE_KEY);
+      window.location.reload();
+    }
+
+    // Pre-fill saved values if any
+    (function prefill() {
+      var saved = getSavedConfig();
+      if (!saved) return;
+      ['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'].forEach(function(k) {
+        var el = document.getElementById('fb-' + k);
+        if (el && saved[k]) el.value = saved[k];
+      });
+    })();
+
+    // Config is hardcoded — overlay never shown to any user
+    // (function checkConfig() { ... })();
+  </script>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import {
+      getFirestore, collection, doc, getDocs, addDoc, setDoc,
+      updateDoc, deleteDoc, onSnapshot, query, orderBy
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import {
+      getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+    // ✅ Firebase config hardcoded — no setup needed for any user
+    const savedConfig = {
+      apiKey:            "AIzaSyCYGV5HpF6-j_HBqix3EA-XFGmT8E698k8",
+      authDomain:        "skr-task.firebaseapp.com",
+      projectId:         "skr-task",
+      storageBucket:     "skr-task.firebasestorage.app",
+      messagingSenderId: "1011690659933",
+      appId:             "1:1011690659933:web:f57e43ee0267a475682db4"
+    };
+
+    if (false) {
+      // never shown — config is hardcoded above
+    } else {
+      try {
+        const app  = initializeApp(savedConfig);
+        const db   = getFirestore(app);
+        const auth = getAuth(app);
+
+        window._firebase = { db, auth, collection, doc, getDocs, addDoc,
+          setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy,
+          signInWithEmailAndPassword, signOut, onAuthStateChanged };
+
+        console.log("✅ Firebase initialised with saved config");
+      } catch(err) {
+        console.error("Firebase init error:", err);
+        // Show overlay with error pre-filled
+        document.getElementById('fb-setup-overlay').classList.add('visible');
+        var errEl = document.getElementById('fb-err-msg');
+        errEl.style.display = 'block';
+        errEl.textContent = '❌ Firebase error: ' + err.message + ' — check your credentials.';
+      }
+    }
+  </script>
+
   <script type="text/babel" data-presets="env,react">
 const { useState, useEffect } = React;
 
@@ -253,6 +442,13 @@ const Filter = createIcon(
   </>
 );
 
+const Search = createIcon(
+  <>
+    <circle cx="11" cy="11" r="8" />
+    <path d="m21 21-4.35-4.35" />
+  </>
+);
+
 const ChevronDown = createIcon(
   <path d="m6 9 6 6 6-6" />
 );
@@ -333,37 +529,49 @@ const PolyplasticsLogo = () => (
   </div>
 );
 
-const STORAGE_KEYS = {
-  themeMode: 'ghm_theme_mode',
-  darkMode: 'ghm_dark_mode',
-  users: 'ghm_users',
-  plants: 'ghm_plants',
-  guestHouses: 'ghm_guest_houses',
-  expenses: 'ghm_expenses',
-  categories: 'ghm_expense_categories',
-};
+// ── Theme persisted in localStorage (per-device preference, not shared data) ──
+const STORAGE_KEYS = { themeMode: 'ghm_theme_mode', darkMode: 'ghm_dark_mode' };
 
 const loadStoredValue = (key, fallback) => {
   try {
-    const rawValue = window.localStorage.getItem(key);
-    if (!rawValue) {
-      return fallback;
-    }
-
-    const parsedValue = JSON.parse(rawValue);
-    return parsedValue ?? fallback;
-  } catch (error) {
-    console.warn(`Unable to read ${key} from localStorage.`, error);
-    return fallback;
-  }
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) ?? fallback) : fallback;
+  } catch { return fallback; }
 };
 
 const saveStoredValue = (key, value) => {
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.warn(`Unable to save ${key} to localStorage.`, error);
-  }
+  try { window.localStorage.setItem(key, JSON.stringify(value)); } catch {}
+};
+
+// ── Firebase helpers ──────────────────────────────────────────────────────────
+const fb = () => window._firebase; // shorthand getter
+
+const fbCol  = (name)       => fb().collection(fb().db, name);
+const fbDoc  = (name, id)   => fb().doc(fb().db, name, String(id));
+
+const fbGetAll = async (colName) => {
+  const snap = await fb().getDocs(fbCol(colName));
+  return snap.docs.map(d => ({ ...d.data(), _fbId: d.id }));
+};
+
+const fbAdd = async (colName, data) => {
+  const ref = await fb().addDoc(fbCol(colName), data);
+  return ref.id;
+};
+
+const fbSet = async (colName, id, data) => {
+  await fb().setDoc(fbDoc(colName, id), data, { merge: true });
+};
+
+const fbDelete = async (colName, id) => {
+  await fb().deleteDoc(fbDoc(colName, id));
+};
+
+// Real-time listener helper — returns unsubscribe function
+const fbListen = (colName, callback) => {
+  return fb().onSnapshot(fbCol(colName), (snap) => {
+    callback(snap.docs.map(d => ({ ...d.data(), _fbId: d.id })));
+  });
 };
 
 const getNextId = (items) => items.reduce((maxId, item) => Math.max(maxId, Number(item.id) || 0), 0) + 1;
@@ -446,13 +654,9 @@ const formatCurrencyDisplay = (value) => {
 };
 
 const getInitialThemeMode = () => {
-  const savedThemeMode = loadStoredValue(STORAGE_KEYS.themeMode, null);
-  if (savedThemeMode === 'light' || savedThemeMode === 'dark-blue') {
-    return savedThemeMode;
-  }
-
-  const legacyDarkMode = loadStoredValue(STORAGE_KEYS.darkMode, false);
-  return legacyDarkMode ? 'dark-blue' : 'light';
+  const saved = loadStoredValue(STORAGE_KEYS.themeMode, null);
+  if (saved === 'light' || saved === 'dark-blue') return saved;
+  return loadStoredValue(STORAGE_KEYS.darkMode, false) ? 'dark-blue' : 'light';
 };
 
 const parseCsv = (text) => {
@@ -540,20 +744,17 @@ const initialExpenses = [
   { id: 8, guestHouseId: 3, plant: 'Plant B', category: 'Maintenance', amount: 25000, date: '2026-02-20', description: 'Plumbing work', userId: 1 },
 ];
 
-const DEFAULT_CATEGORIES = ['Food', 'Maintenance', 'Utilities', 'Miscellaneous'];
+const categories = ['Food', 'Maintenance', 'Utilities', 'Miscellaneous'];
 
 const App = () => {
   const [themeMode, setThemeMode] = useState(getInitialThemeMode);
   const [currentUser, setCurrentUser] = useState(null);
-  const [users, setUsers] = useState(() => loadStoredValue(STORAGE_KEYS.users, initialUsers));
-  const [plants, setPlants] = useState(() => loadStoredValue(STORAGE_KEYS.plants, initialPlants));
-  const [guestHouses, setGuestHouses] = useState(() => loadStoredValue(STORAGE_KEYS.guestHouses, initialGuestHouses));
-  const [expenses, setExpenses] = useState(() => {
-    const storedExpenses = loadStoredValue(STORAGE_KEYS.expenses, initialExpenses);
-    const expenseRecords = Array.isArray(storedExpenses) ? storedExpenses : initialExpenses;
-    return expenseRecords.map(normalizeExpenseRecord);
-  });
-  const [categories, setCategories] = useState(() => loadStoredValue(STORAGE_KEYS.categories, DEFAULT_CATEGORIES));
+  const [users, setUsers] = useState([]);
+  const [plants, setPlants] = useState([]);
+  const [guestHouses, setGuestHouses] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [dbReady, setDbReady] = useState(false);   // true once Firebase data loaded
+  const [dbError, setDbError] = useState(null);     // holds error message if Firebase fails
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState('');
@@ -566,6 +767,7 @@ const App = () => {
   const [filterDateTo, setFilterDateTo] = useState('');
   const darkMode = themeMode === 'dark-blue';
 
+  // Theme — still local only (per-device preference)
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
     document.body.classList.toggle('dark', darkMode);
@@ -578,35 +780,88 @@ const App = () => {
     saveStoredValue(STORAGE_KEYS.darkMode, darkMode);
   }, [themeMode, darkMode]);
 
+  // ── Firebase: seed initial data if collections are empty, then listen ──────
   useEffect(() => {
-    saveStoredValue(STORAGE_KEYS.users, users);
-  }, [users]);
+    if (!window._firebase) {
+      setDbError('Firebase not initialised. Check your firebaseConfig in the HTML file.');
+      return;
+    }
 
-  useEffect(() => {
-    saveStoredValue(STORAGE_KEYS.plants, plants);
-  }, [plants]);
+    let unsubs = [];
 
-  useEffect(() => {
-    saveStoredValue(STORAGE_KEYS.guestHouses, guestHouses);
-  }, [guestHouses]);
+    const bootstrap = async () => {
+      try {
+        // Seed users if empty
+        const existingUsers = await fbGetAll('users');
+        if (existingUsers.length === 0) {
+          for (const u of initialUsers) {
+            await fbSet('users', u.id, u);
+          }
+        }
+        // Seed plants if empty
+        const existingPlants = await fbGetAll('plants');
+        if (existingPlants.length === 0) {
+          for (const p of initialPlants) {
+            await fbSet('plants', p, { name: p });
+          }
+        }
+        // Seed guest houses if empty
+        const existingGH = await fbGetAll('guestHouses');
+        if (existingGH.length === 0) {
+          for (const gh of initialGuestHouses) {
+            await fbSet('guestHouses', gh.id, gh);
+          }
+        }
+        // Seed expenses if empty
+        const existingExp = await fbGetAll('expenses');
+        if (existingExp.length === 0) {
+          for (const e of initialExpenses) {
+            await fbSet('expenses', e.id, normalizeExpenseRecord(e));
+          }
+        }
 
-  useEffect(() => {
-    saveStoredValue(STORAGE_KEYS.expenses, expenses);
-  }, [expenses]);
+        // Real-time listeners — update React state on any Firestore change
+        unsubs.push(fbListen('users', (docs) => {
+          setUsers(docs.map(d => ({ ...d, id: isNaN(d.id) ? d._fbId : Number(d.id) })));
+        }));
+        unsubs.push(fbListen('plants', (docs) => {
+          setPlants(docs.map(d => d.name).filter(Boolean).sort());
+        }));
+        unsubs.push(fbListen('guestHouses', (docs) => {
+          setGuestHouses(docs.map(d => ({ ...d, id: isNaN(d.id) ? d._fbId : Number(d.id) })));
+        }));
+        unsubs.push(fbListen('expenses', (docs) => {
+          setExpenses(docs.map(d => normalizeExpenseRecord({
+            ...d, id: isNaN(d.id) ? d._fbId : Number(d.id)
+          })));
+        }));
 
-  useEffect(() => {
-    saveStoredValue(STORAGE_KEYS.categories, categories);
-  }, [categories]);
+        setDbReady(true);
+      } catch (err) {
+        console.error('Firebase bootstrap error:', err);
+        setDbError('Could not connect to Firebase: ' + err.message);
+      }
+    };
 
-  // Authentication
-  const handleLogin = (username, password) => {
-    const user = users.find(u => u.username === username && u.password === password);
-    if (user) {
-      setCurrentUser(user);
+    bootstrap();
+    return () => unsubs.forEach(u => u()); // cleanup listeners on unmount
+  }, []);
+
+  // ── Authentication ──────────────────────────────────────────────────────────
+  // Login: match username in Firestore users collection, then verify password
+  const handleLogin = async (username, password) => {
+    try {
+      // Find user document by username field
+      const allUsers = await fbGetAll('users');
+      const userDoc = allUsers.find(u => u.username === username && u.password === password);
+      if (!userDoc) return false;
+      setCurrentUser({ ...userDoc, id: isNaN(userDoc.id) ? userDoc._fbId : Number(userDoc.id) });
       setActiveTab('dashboard');
       return true;
+    } catch (err) {
+      console.error('Login error:', err);
+      return false;
     }
-    return false;
   };
 
   const handleLogout = () => {
@@ -630,16 +885,13 @@ const App = () => {
     setFormData({});
   };
 
-  const ensurePlantExists = (plantName) => {
+  const ensurePlantExists = async (plantName) => {
     const normalizedPlant = `${plantName ?? ''}`.trim();
-    if (!normalizedPlant) {
-      return '';
+    if (!normalizedPlant) return '';
+    if (!plants.includes(normalizedPlant)) {
+      try { await fbSet('plants', normalizedPlant, { name: normalizedPlant }); }
+      catch (err) { console.warn('Could not save plant:', err); }
     }
-
-    setPlants((currentPlants) => (
-      currentPlants.includes(normalizedPlant) ? currentPlants : [...currentPlants, normalizedPlant]
-    ));
-
     return normalizedPlant;
   };
 
@@ -663,11 +915,7 @@ const App = () => {
       return null;
     }
 
-    const amount = Number(data.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      window.alert('Please enter a valid expense amount.');
-      return null;
-    }
+    const amount = data.amount !== '' && data.amount != null ? Number(data.amount) : 0;
 
     const paymentCollected = parseOptionalAmount(data.paymentCollected);
     if (paymentCollected === null || paymentCollected < 0) {
@@ -685,156 +933,99 @@ const App = () => {
     });
   };
 
-  // CRUD Operations
-  const handleAddExpense = (data) => {
+  // ── CRUD Operations — all write to Firestore ────────────────────────────────
+  // Firestore real-time listeners above will automatically update React state.
+
+  const handleAddExpense = async (data) => {
     const expensePayload = buildExpensePayload(data);
-    if (!expensePayload) {
-      return;
-    }
-
-    setExpenses((currentExpenses) => [
-      ...currentExpenses,
-      { ...expensePayload, id: getNextId(currentExpenses), userId: currentUser.id },
-    ]);
-    closeModal();
+    if (!expensePayload) return;
+    const newId = getNextId(expenses);
+    const record = { ...expensePayload, id: newId, userId: currentUser.id };
+    try {
+      await fbSet('expenses', newId, record);
+      closeModal();
+    } catch (err) { window.alert('Save failed: ' + err.message); }
   };
 
-  const handleEditExpense = (data) => {
+  const handleEditExpense = async (data) => {
     const expensePayload = buildExpensePayload(data, selectedItem);
-    if (!expensePayload) {
-      return;
-    }
-
-    setExpenses((currentExpenses) => currentExpenses.map((expense) =>
-      expense.id === selectedItem.id ? expensePayload : expense
-    ));
-    closeModal();
+    if (!expensePayload) return;
+    try {
+      await fbSet('expenses', selectedItem.id, expensePayload);
+      closeModal();
+    } catch (err) { window.alert('Update failed: ' + err.message); }
   };
 
-  const handleDeleteExpense = (id) => {
-    setExpenses(expenses.filter(e => e.id !== id));
+  const handleDeleteExpense = async (id) => {
+    try { await fbDelete('expenses', id); }
+    catch (err) { window.alert('Delete failed: ' + err.message); }
   };
 
-  const handleAddUser = (data) => {
-    const newUser = {
-      id: getNextId(users),
-      ...data,
-    };
-    setUsers((currentUsers) => [...currentUsers, newUser]);
-    closeModal();
+  const handleAddUser = async (data) => {
+    const newId = getNextId(users);
+    const newUser = { id: newId, ...data };
+    try {
+      await fbSet('users', newId, newUser);
+      closeModal();
+    } catch (err) { window.alert('Save failed: ' + err.message); }
   };
 
-  const handleEditUser = (data) => {
-    setUsers(users.map(u => u.id === selectedItem.id ? { ...u, ...data } : u));
-    closeModal();
+  const handleEditUser = async (data) => {
+    const updated = { ...selectedItem, ...data };
+    try {
+      await fbSet('users', selectedItem.id, updated);
+      closeModal();
+    } catch (err) { window.alert('Update failed: ' + err.message); }
   };
 
-  const handleDeleteUser = (id) => {
-    setUsers(users.filter(u => u.id !== id));
+  const handleDeleteUser = async (id) => {
+    try { await fbDelete('users', id); }
+    catch (err) { window.alert('Delete failed: ' + err.message); }
   };
 
-  const handleAddGuestHouse = (data) => {
+  const handleAddGuestHouse = async (data) => {
     const name = `${data.name ?? ''}`.trim();
     const plant = `${data.plant ?? ''}`.trim();
-
-    if (!name || !plant) {
-      window.alert('Please provide both a guest house name and a plant.');
-      return;
-    }
-
-    const alreadyExists = guestHouses.some((guestHouse) => (
-      normalizeText(guestHouse.name) === normalizeText(name) &&
-      normalizeText(guestHouse.plant) === normalizeText(plant)
-    ));
-
-    if (alreadyExists) {
-      window.alert('A guest house with the same name already exists for this plant.');
-      return;
-    }
-
-    ensurePlantExists(plant);
-    setGuestHouses((currentGuestHouses) => [
-      ...currentGuestHouses,
-      { id: getNextId(currentGuestHouses), name, plant },
-    ]);
-    closeModal();
+    if (!name || !plant) { window.alert('Please provide both a guest house name and a plant.'); return; }
+    const alreadyExists = guestHouses.some(gh =>
+      normalizeText(gh.name) === normalizeText(name) &&
+      normalizeText(gh.plant) === normalizeText(plant)
+    );
+    if (alreadyExists) { window.alert('A guest house with the same name already exists for this plant.'); return; }
+    const newId = getNextId(guestHouses);
+    try {
+      await ensurePlantExists(plant);
+      await fbSet('guestHouses', newId, { id: newId, name, plant });
+      closeModal();
+    } catch (err) { window.alert('Save failed: ' + err.message); }
   };
 
-  const handleDeleteGuestHouse = (id) => {
+  const handleDeleteGuestHouse = async (id) => {
     const hasExpenses = expenses.some(e => e.guestHouseId === id);
-    if (hasExpenses) {
-      window.alert('Cannot delete this guest house because it has associated expense records. Please delete those expenses first.');
-      return;
-    }
-    if (window.confirm('Are you sure you want to delete this guest house? This action cannot be undone.')) {
-      setGuestHouses(guestHouses.filter(gh => gh.id !== id));
-    }
+    if (hasExpenses) { window.alert('Cannot delete this guest house because it has associated expense records. Please delete those expenses first.'); return; }
+    if (!window.confirm('Are you sure you want to delete this guest house? This action cannot be undone.')) return;
+    try { await fbDelete('guestHouses', id); }
+    catch (err) { window.alert('Delete failed: ' + err.message); }
   };
 
-  const handleEditGuestHouse = (data) => {
+  const handleEditGuestHouse = async (data) => {
     const name = `${data.name ?? ''}`.trim();
     const plant = `${data.plant ?? ''}`.trim();
-
-    if (!name || !plant) {
-      window.alert('Please provide both a guest house name and a plant.');
-      return;
-    }
-
-    const alreadyExists = guestHouses.some((guestHouse) => (
-      guestHouse.id !== selectedItem.id &&
-      normalizeText(guestHouse.name) === normalizeText(name) &&
-      normalizeText(guestHouse.plant) === normalizeText(plant)
-    ));
-
-    if (alreadyExists) {
-      window.alert('A guest house with the same name already exists for this plant.');
-      return;
-    }
-
-    ensurePlantExists(plant);
-    setGuestHouses(guestHouses.map(gh =>
-      gh.id === selectedItem.id ? { ...gh, name, plant } : gh
-    ));
-    setExpenses(expenses.map((expense) => (
-      expense.guestHouseId === selectedItem.id ? { ...expense, plant } : expense
-    )));
-    closeModal();
-  };
-
-  // ── Category CRUD (Super Admin only) ──
-  const handleAddCategory = (data) => {
-    const name = `${data.categoryName ?? ''}`.trim();
-    if (!name) { window.alert('Please enter a category name.'); return; }
-    if (categories.some(c => c.toLowerCase() === name.toLowerCase())) {
-      window.alert('A category with this name already exists.'); return;
-    }
-    setCategories([...categories, name]);
-    closeModal();
-  };
-
-  const handleEditCategory = (data) => {
-    const name = `${data.categoryName ?? ''}`.trim();
-    if (!name) { window.alert('Please enter a category name.'); return; }
-    if (categories.some((c, i) => c.toLowerCase() === name.toLowerCase() && c !== selectedItem)) {
-      window.alert('A category with this name already exists.'); return;
-    }
-    setCategories(categories.map(c => c === selectedItem ? name : c));
-    setExpenses(expenses.map(e => e.category === selectedItem ? { ...e, category: name } : e));
-    closeModal();
-  };
-
-  const handleDeleteCategory = (cat) => {
-    const hasExpenses = expenses.some(e => e.category === cat);
-    if (hasExpenses) {
-      window.alert('Cannot delete this category because expenses are using it. Reassign those expenses first.');
-      return;
-    }
-    if (DEFAULT_CATEGORIES.includes(cat)) {
-      window.alert('Built-in categories cannot be deleted.'); return;
-    }
-    if (window.confirm(`Delete category "${cat}"? This cannot be undone.`)) {
-      setCategories(categories.filter(c => c !== cat));
-    }
+    if (!name || !plant) { window.alert('Please provide both a guest house name and a plant.'); return; }
+    const alreadyExists = guestHouses.some(gh =>
+      gh.id !== selectedItem.id &&
+      normalizeText(gh.name) === normalizeText(name) &&
+      normalizeText(gh.plant) === normalizeText(plant)
+    );
+    if (alreadyExists) { window.alert('A guest house with the same name already exists for this plant.'); return; }
+    try {
+      await ensurePlantExists(plant);
+      await fbSet('guestHouses', selectedItem.id, { ...selectedItem, name, plant });
+      // Update plant field on all linked expenses
+      const linkedExpenses = expenses.filter(e => e.guestHouseId === selectedItem.id);
+      await Promise.all(linkedExpenses.map(e => fbSet('expenses', e.id, { ...e, plant })));
+      closeModal();
+    } catch (err) { window.alert('Update failed: ' + err.message); }
   };
 
   const handleBulkUploadExpenses = async (data) => {
@@ -923,7 +1114,7 @@ const App = () => {
       const guestMobile = getValue(columnIndex.guestMobile);
       const paymentCollectedInput = getValue(columnIndex.paymentCollected);
 
-      if (!date || !guestHouseName || !categoryInput || !amountInput) {
+      if (!date || !guestHouseName || !categoryInput) {
         skippedRows.push(`Line ${lineNumber}: one or more required values are missing.`);
         return;
       }
@@ -941,8 +1132,8 @@ const App = () => {
         return;
       }
 
-      const amount = Number(amountInput);
-      if (!Number.isFinite(amount) || amount <= 0) {
+      const amount = amountInput ? Number(amountInput) : 0;
+      if (amountInput && (!Number.isFinite(amount) || amount < 0)) {
         skippedRows.push(`Line ${lineNumber}: amount "${amountInput}" is invalid.`);
         return;
       }
@@ -1022,7 +1213,12 @@ const App = () => {
       return;
     }
 
-    setExpenses((currentExpenses) => [...currentExpenses, ...importedExpenses]);
+    try {
+      await Promise.all(importedExpenses.map(e => fbSet('expenses', e.id, e)));
+    } catch (err) {
+      window.alert('Import failed while saving to Firebase: ' + err.message);
+      return;
+    }
     closeModal();
 
     const skippedSummary = skippedRows.length > 0
@@ -1107,8 +1303,46 @@ const App = () => {
         amount: filtered.filter(e => e.guestHouseId === gh.id).reduce((sum, e) => sum + e.amount, 0)
       }));
 
-    return { total, byCategory, byPlant, byGuestHouse, count: filtered.length };
+    const totalPaymentCollected = filtered.reduce((sum, e) => sum + (Number(e.paymentCollected) || 0), 0);
+    const netExpense = total - totalPaymentCollected;
+    return { total, totalPaymentCollected, netExpense, byCategory, byPlant, byGuestHouse, count: filtered.length };
   };
+
+  // Show error if Firebase config is missing/wrong
+  if (dbError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full border border-red-200">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-3 bg-red-100 rounded-xl">
+              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+            </div>
+            <h2 className="text-xl font-bold text-red-700">Firebase Not Configured</h2>
+          </div>
+          <p className="text-slate-600 mb-4 text-sm leading-relaxed">{dbError}</p>
+          <div className="bg-slate-50 rounded-xl p-4 text-xs font-mono text-slate-700 space-y-1">
+            <p className="font-bold text-slate-900 mb-2 not-italic">Quick setup steps:</p>
+            <p>1. Go to console.firebase.google.com</p>
+            <p>2. Create project → Add Web App → copy config</p>
+            <p>3. Open this HTML file, search for YOUR_API_KEY and paste your config</p>
+            <p>4. In Firestore → Create database (start in test mode)</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show spinner while Firebase loads data
+  if (!dbReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-slate-600 font-medium">Connecting to database…</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <LoginScreen onLogin={handleLogin} darkMode={darkMode} setThemeMode={setThemeMode} />;
@@ -1140,7 +1374,14 @@ const App = () => {
                   <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{currentUser.name}</p>
                   <p className="text-xs text-slate-600 dark:text-slate-400">{currentUser.role} | {currentUser.plant}</p>
                 </div>
+                <div className="flex items-center gap-3">
+                {/* Firebase live indicator */}
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800" title="Connected to Firebase — data is shared live">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                  <span className="text-xs text-green-700 dark:text-green-400 font-medium hidden sm:inline">Live</span>
+                </div>
                 <ThemeSwitch darkMode={darkMode} setThemeMode={setThemeMode} />
+              </div>
                 <button
                   onClick={handleLogout}
                   className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium"
@@ -1191,14 +1432,6 @@ const App = () => {
                   />
                 </>
               )}
-              {currentUser.role === 'Super Admin' && (
-                <NavButton
-                  active={activeTab === 'categories'}
-                  onClick={() => setActiveTab('categories')}
-                  icon={<Filter className="w-4 h-4" />}
-                  label="Categories"
-                />
-              )}
             </div>
           </div>
         </nav>
@@ -1223,7 +1456,6 @@ const App = () => {
               filterDateTo={filterDateTo}
               setFilterDateTo={setFilterDateTo}
               plants={plants}
-              categories={categories}
               applyFilters={applyFilters}
               handleExport={handleExport}
               handleExportGuestList={handleExportGuestList}
@@ -1246,7 +1478,6 @@ const App = () => {
               filterCategory={filterCategory}
               setFilterCategory={setFilterCategory}
               plants={plants.filter(p => accessibleGuestHouses.some(gh => gh.plant === p))}
-              categories={categories}
               applyFilters={applyFilters}
               handleExport={handleExport}
               handleExportGuestList={handleExportGuestList}
@@ -1259,7 +1490,6 @@ const App = () => {
               plants={plants}
               currentUser={currentUser}
               darkMode={darkMode}
-              categories={categories}
             />
           )}
 
@@ -1283,17 +1513,6 @@ const App = () => {
               onDelete={handleDeleteGuestHouse}
             />
           )}
-
-          {activeTab === 'categories' && currentUser.role === 'Super Admin' && (
-            <CategoriesView
-              categories={categories}
-              expenses={expenses}
-              defaultCategories={DEFAULT_CATEGORIES}
-              onAdd={() => openModal('addCategory', { categoryName: '' })}
-              onEdit={(cat) => openModal('editCategory', { categoryName: cat }, cat)}
-              onDelete={handleDeleteCategory}
-            />
-          )}
         </main>
 
         {/* Modal */}
@@ -1303,7 +1522,6 @@ const App = () => {
             data={formData}
             guestHouses={accessibleGuestHouses}
             plants={plants}
-            categories={categories}
             onClose={closeModal}
             onSubmit={(data) => {
               if (modalType === 'addExpense') handleAddExpense(data);
@@ -1313,8 +1531,6 @@ const App = () => {
               if (modalType === 'editUser') handleEditUser(data);
               if (modalType === 'addGuestHouse') handleAddGuestHouse(data);
               if (modalType === 'editGuestHouse') handleEditGuestHouse(data);
-              if (modalType === 'addCategory') handleAddCategory(data);
-              if (modalType === 'editCategory') handleEditCategory(data);
             }}
           />
         )}
@@ -1324,18 +1540,45 @@ const App = () => {
 };
 
 // Login Screen
+const FirebaseSetupBanner = () => {
+  const isDefault = !window._firebase ||
+    (typeof window._firebase === 'object' && Object.keys(window._firebase).length === 0);
+  // Try to detect unconfigured state by checking if apiKey is still placeholder
+  const [unconfigured, setUnconfigured] = React.useState(false);
+  React.useEffect(() => {
+    try {
+      const app = window._firebase && window._firebase.db && window._firebase.db.app;
+      if (app && app.options && app.options.apiKey === 'YOUR_API_KEY') setUnconfigured(true);
+    } catch {}
+  }, []);
+  if (!unconfigured) return null;
+  return (
+    <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-xl text-sm text-amber-800 space-y-2">
+      <p className="font-bold flex items-center gap-2">
+        <span>⚠️</span> Firebase config not set — app is in demo mode
+      </p>
+      <p className="text-xs leading-relaxed">
+        Data entered here will NOT be shared with other users until you configure Firebase.
+        Open this HTML file and replace <code className="bg-amber-100 px-1 rounded">YOUR_API_KEY</code> with your real Firebase project config.
+      </p>
+    </div>
+  );
+};
+
 const LoginScreen = ({ onLogin, darkMode, setThemeMode }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (onLogin(username, password)) {
+    setError('Signing in…');
+    const ok = await onLogin(username, password);
+    if (ok) {
       setError('');
     } else {
-      setError('Invalid credentials');
+      setError('Invalid username or password.');
     }
   };
 
@@ -1407,8 +1650,9 @@ const LoginScreen = ({ onLogin, darkMode, setThemeMode }) => {
             </button>
           </form>
 
+          <FirebaseSetupBanner />
           <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
-            <p className="text-xs text-blue-800 dark:text-blue-300 font-semibold mb-2">Demo Credentials:</p>
+            <p className="text-xs text-blue-800 dark:text-blue-300 font-semibold mb-2">Default Credentials:</p>
             <div className="space-y-1 text-xs text-blue-700 dark:text-blue-400">
               <p>Admin: admin / admin123</p>
               <p>User: user1 / user123</p>
@@ -1470,7 +1714,7 @@ const ThemeSwitch = ({ darkMode, setThemeMode }) => (
 );
 
 // Dashboard View
-const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, filterPlant, setFilterPlant, filterGuestHouse, setFilterGuestHouse, filterCategory, setFilterCategory, filterDateFrom, setFilterDateFrom, filterDateTo, setFilterDateTo, plants, categories, applyFilters, handleExport, handleExportGuestList }) => {
+const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, filterPlant, setFilterPlant, filterGuestHouse, setFilterGuestHouse, filterCategory, setFilterCategory, filterDateFrom, setFilterDateFrom, filterDateTo, setFilterDateTo, plants, applyFilters, handleExport, handleExportGuestList }) => {
   const isAdmin = ['Admin', 'Super Admin', 'Top Management'].includes(currentUser.role);
 
   const roleTitle = currentUser.role === 'User' ? 'User Dashboard' :
@@ -1608,8 +1852,8 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Stats Cards — 6 blocks in 2 rows of 3 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <StatCard
           title="Total Expenses"
           value={`₹${stats.total.toLocaleString('en-IN')}`}
@@ -1618,10 +1862,24 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
           darkMode={darkMode}
         />
         <StatCard
+          title="Payment Collected"
+          value={`₹${stats.totalPaymentCollected.toLocaleString('en-IN')}`}
+          icon={<TrendingUp className="w-8 h-8" />}
+          color="emerald"
+          darkMode={darkMode}
+        />
+        <StatCard
+          title="Net Expense"
+          value={`₹${stats.netExpense.toLocaleString('en-IN')}`}
+          icon={<BarChart3 className="w-8 h-8" />}
+          color="amber"
+          darkMode={darkMode}
+        />
+        <StatCard
           title="Total Transactions"
           value={stats.count}
           icon={<TrendingUp className="w-8 h-8" />}
-          color="emerald"
+          color="purple"
           darkMode={darkMode}
         />
         <StatCard
@@ -1632,10 +1890,10 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
           darkMode={darkMode}
         />
         <StatCard
-          title="Average/Transaction"
+          title="Avg / Transaction"
           value={`₹${stats.count > 0 ? Math.round(stats.total / stats.count).toLocaleString('en-IN') : 0}`}
           icon={<BarChart3 className="w-8 h-8" />}
-          color="amber"
+          color="blue"
           darkMode={darkMode}
         />
       </div>
@@ -1693,7 +1951,7 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
                     <td className="py-3 px-4"><GuestInfoCell expense={expense} /></td>
                     <td className="py-3 px-4"><StayDetailsCell expense={expense} /></td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getCategoryColor(expense.category, categories)}`}>
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getCategoryColor(expense.category)}`}>
                         {expense.category}
                       </span>
                     </td>
@@ -1715,8 +1973,13 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
 };
 
 // Expenses View
-const ExpensesView = ({ expenses, guestHouses, currentUser, onAdd, onBulkUpload, onEdit, onDelete, filterPlant, setFilterPlant, filterGuestHouse, setFilterGuestHouse, filterCategory, setFilterCategory, plants, categories, applyFilters, handleExport, handleExportGuestList }) => {
-  const filtered = applyFilters(expenses);
+const ExpensesView = ({ expenses, guestHouses, currentUser, onAdd, onBulkUpload, onEdit, onDelete, filterPlant, setFilterPlant, filterGuestHouse, setFilterGuestHouse, filterCategory, setFilterCategory, plants, applyFilters, handleExport, handleExportGuestList }) => {
+  const [guestSearch, setGuestSearch] = React.useState('');
+  const filtered = applyFilters(expenses).filter(e => {
+    if (!guestSearch.trim()) return true;
+    const q = guestSearch.trim().toLowerCase();
+    return (e.guestName || '').toLowerCase().includes(q);
+  });
 
   return (
     <div className="space-y-6">
@@ -1763,12 +2026,31 @@ const ExpensesView = ({ expenses, guestHouses, currentUser, onAdd, onBulkUpload,
           <Filter className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Filters</h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Guest Name Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
+            <input
+              type="text"
+              value={guestSearch}
+              onChange={(e) => setGuestSearch(e.target.value)}
+              placeholder="Search guest name…"
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+            {guestSearch && (
+              <button
+                onClick={() => setGuestSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
           {currentUser.role !== 'User' && (
             <select
               value={filterPlant}
               onChange={(e) => setFilterPlant(e.target.value)}
-              className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 text-sm"
             >
               <option value="All">All Plants</option>
               {plants.map(plant => (
@@ -1779,7 +2061,7 @@ const ExpensesView = ({ expenses, guestHouses, currentUser, onAdd, onBulkUpload,
           <select
             value={filterGuestHouse}
             onChange={(e) => setFilterGuestHouse(e.target.value)}
-            className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+            className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 text-sm"
           >
             <option value="All">All Guest Houses</option>
             {guestHouses.map(gh => (
@@ -1789,7 +2071,7 @@ const ExpensesView = ({ expenses, guestHouses, currentUser, onAdd, onBulkUpload,
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+            className="px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 text-sm"
           >
             <option value="All">All Categories</option>
             {categories.map(cat => (
@@ -1832,7 +2114,7 @@ const ExpensesView = ({ expenses, guestHouses, currentUser, onAdd, onBulkUpload,
                     <td className="py-4 px-6"><GuestInfoCell expense={expense} /></td>
                     <td className="py-4 px-6"><StayDetailsCell expense={expense} /></td>
                     <td className="py-4 px-6">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getCategoryColor(expense.category, categories)}`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getCategoryColor(expense.category)}`}>
                         {expense.category}
                       </span>
                     </td>
@@ -2212,7 +2494,7 @@ const BulkUploadExpensesForm = ({ formData, handleChange }) => {
   );
 };
 
-const Modal = ({ type, data, guestHouses, plants, categories, onClose, onSubmit }) => {
+const Modal = ({ type, data, guestHouses, plants, onClose, onSubmit }) => {
   const [formData, setFormData] = useState(data || {});
 
   const handleSubmit = (e) => {
@@ -2233,8 +2515,6 @@ const Modal = ({ type, data, guestHouses, plants, categories, onClose, onSubmit 
       case 'editUser': return 'Edit User';
       case 'addGuestHouse': return 'Add Guest House';
       case 'editGuestHouse': return 'Edit Guest House';
-      case 'addCategory': return 'Add Expense Category';
-      case 'editCategory': return 'Edit Expense Category';
       default: return 'Modal';
     }
   };
@@ -2591,28 +2871,6 @@ const Modal = ({ type, data, guestHouses, plants, categories, onClose, onSubmit 
             <BulkUploadExpensesForm formData={formData} handleChange={handleChange} />
           )}
 
-          {(type === 'addCategory' || type === 'editCategory') && (
-            <>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  Category Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.categoryName || ''}
-                  onChange={(e) => handleChange('categoryName', e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g. Housekeeping, Transport..."
-                  required
-                  autoFocus
-                />
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                  This category will be available when adding expenses across all plants.
-                </p>
-              </div>
-            </>
-          )}
-
           <div className="flex gap-3 pt-4">
             <button
               type="button"
@@ -2825,19 +3083,14 @@ const PieChartComponent = ({ data, darkMode }) => {
 };
 
 // Helper functions
-const getCategoryColor = (category, allCategories) => {
-  const staticColors = {
+const getCategoryColor = (category) => {
+  const colors = {
     Food: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
     Maintenance: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
     Utilities: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
     Miscellaneous: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   };
-  if (staticColors[category]) return staticColors[category];
-  if (allCategories && allCategories.length > 0) {
-    const idx = allCategories.indexOf(category);
-    if (idx >= 0) return PALETTE[idx % PALETTE.length].badge;
-  }
-  return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400';
+  return colors[category] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400';
 };
 
 const getRoleColor = (role) => {
@@ -2852,189 +3105,21 @@ const getRoleColor = (role) => {
 
 
 // ════════════════════════════════════════════════
-//  CATEGORIES VIEW (Super Admin)
-// ════════════════════════════════════════════════
-const PALETTE = [
-  { bg: 'bg-blue-500',    text: 'text-blue-700',    light: 'bg-blue-50 dark:bg-blue-900/20',    badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-  { bg: 'bg-emerald-500', text: 'text-emerald-700', light: 'bg-emerald-50 dark:bg-emerald-900/20', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
-  { bg: 'bg-purple-500',  text: 'text-purple-700',  light: 'bg-purple-50 dark:bg-purple-900/20',  badge: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
-  { bg: 'bg-amber-500',   text: 'text-amber-700',   light: 'bg-amber-50 dark:bg-amber-900/20',   badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
-  { bg: 'bg-rose-500',    text: 'text-rose-700',    light: 'bg-rose-50 dark:bg-rose-900/20',    badge: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' },
-  { bg: 'bg-cyan-500',    text: 'text-cyan-700',    light: 'bg-cyan-50 dark:bg-cyan-900/20',    badge: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' },
-  { bg: 'bg-orange-500',  text: 'text-orange-700',  light: 'bg-orange-50 dark:bg-orange-900/20',  badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
-  { bg: 'bg-teal-500',    text: 'text-teal-700',    light: 'bg-teal-50 dark:bg-teal-900/20',    badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' },
-];
-
-const getPaletteForCategory = (cat, allCategories) => {
-  const idx = allCategories.indexOf(cat);
-  return PALETTE[idx % PALETTE.length] || PALETTE[0];
-};
-
-const CategoriesView = ({ categories, expenses, defaultCategories, onAdd, onEdit, onDelete }) => {
-  const cardCls = 'bg-white dark:bg-slate-900 rounded-2xl shadow border border-slate-200 dark:border-slate-800';
-
-  const expenseCountByCategory = React.useMemo(() => {
-    const map = {};
-    categories.forEach(c => { map[c] = 0; });
-    expenses.forEach(e => { if (e.category && map[e.category] !== undefined) map[e.category]++; });
-    return map;
-  }, [categories, expenses]);
-
-  const totalExpensesByCategory = React.useMemo(() => {
-    const map = {};
-    categories.forEach(c => { map[c] = 0; });
-    expenses.forEach(e => { if (e.category && map[e.category] !== undefined) map[e.category] += (e.amount || 0); });
-    return map;
-  }, [categories, expenses]);
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Expense Categories</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Manage categories used for classifying expenses across all plants.
-          </p>
-        </div>
-        <button
-          onClick={onAdd}
-          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          Add Category
-        </button>
-      </div>
-
-      {/* Summary bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className={`${cardCls} p-4 flex flex-col gap-1`}>
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total Categories</span>
-          <span className="text-3xl font-black text-slate-900 dark:text-slate-100">{categories.length}</span>
-        </div>
-        <div className={`${cardCls} p-4 flex flex-col gap-1`}>
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Built-in</span>
-          <span className="text-3xl font-black text-blue-600 dark:text-blue-400">{defaultCategories.length}</span>
-        </div>
-        <div className={`${cardCls} p-4 flex flex-col gap-1`}>
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Custom</span>
-          <span className="text-3xl font-black text-purple-600 dark:text-purple-400">{categories.length - defaultCategories.length}</span>
-        </div>
-        <div className={`${cardCls} p-4 flex flex-col gap-1`}>
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">In Use</span>
-          <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
-            {categories.filter(c => expenseCountByCategory[c] > 0).length}
-          </span>
-        </div>
-      </div>
-
-      {/* Categories list */}
-      <div className={`${cardCls} overflow-hidden`}>
-        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg">All Categories</h3>
-          <span className="text-xs text-slate-400">{categories.length} total</span>
-        </div>
-        <div className="divide-y divide-slate-100 dark:divide-slate-800">
-          {categories.map((cat, idx) => {
-            const palette = PALETTE[idx % PALETTE.length];
-            const count = expenseCountByCategory[cat] || 0;
-            const total = totalExpensesByCategory[cat] || 0;
-            const isBuiltIn = defaultCategories.includes(cat);
-            const pct = expenses.length > 0 ? Math.round((count / expenses.length) * 100) : 0;
-            return (
-              <div key={cat} className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                {/* Colour swatch */}
-                <div className={`w-10 h-10 rounded-xl ${palette.bg} flex items-center justify-center flex-shrink-0 shadow`}>
-                  <Filter className="w-4 h-4 text-white" />
-                </div>
-
-                {/* Name + badges */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">{cat}</span>
-                    {isBuiltIn && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Built-in</span>
-                    )}
-                    {!isBuiltIn && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">Custom</span>
-                    )}
-                  </div>
-                  {/* Usage bar */}
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden max-w-[160px]">
-                      <div className={`h-full ${palette.bg} rounded-full transition-all duration-700`} style={{ width: `${pct}%` }} />
-                    </div>
-                    <span className="text-xs text-slate-400">{count} expense{count !== 1 ? 's' : ''} · {pct}%</span>
-                  </div>
-                </div>
-
-                {/* Amount */}
-                <div className="text-right hidden sm:block flex-shrink-0">
-                  <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">
-                    {total > 0 ? `₹${Number(total).toLocaleString('en-IN')}` : '—'}
-                  </p>
-                  <p className="text-xs text-slate-400">total spent</p>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => onEdit(cat)}
-                    className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg transition-colors"
-                    title="Edit category"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  {!isBuiltIn && (
-                    <button
-                      onClick={() => onDelete(cat)}
-                      className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 dark:text-red-400 rounded-lg transition-colors"
-                      title={count > 0 ? 'Cannot delete — has expenses' : 'Delete category'}
-                      disabled={count > 0}
-                    >
-                      <Trash2 className={`w-4 h-4 ${count > 0 ? 'opacity-30' : ''}`} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-          {categories.length === 0 && (
-            <div className="p-10 text-center text-slate-400">No categories yet. Add one above.</div>
-          )}
-        </div>
-      </div>
-
-      {/* Info note */}
-      <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-sm text-amber-700 dark:text-amber-400">
-        <Filter className="w-5 h-5 flex-shrink-0 mt-0.5" />
-        <span>
-          <strong>Built-in categories</strong> (Food, Maintenance, Utilities, Miscellaneous) can be renamed but not deleted. 
-          <strong> Custom categories</strong> can only be deleted if no expenses are using them.
-        </span>
-      </div>
-    </div>
-  );
-};
-
-// ════════════════════════════════════════════════
 //  EXPENSE REPORT VIEW
 // ════════════════════════════════════════════════
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const CATEGORIES = ['Food','Maintenance','Utilities','Miscellaneous'];
+const CAT_COLORS = {
+  Food: { bg: 'bg-blue-500', text: 'text-blue-700', light: 'bg-blue-50 dark:bg-blue-900/20' },
+  Maintenance: { bg: 'bg-emerald-500', text: 'text-emerald-700', light: 'bg-emerald-50 dark:bg-emerald-900/20' },
+  Utilities: { bg: 'bg-purple-500', text: 'text-purple-700', light: 'bg-purple-50 dark:bg-purple-900/20' },
+  Miscellaneous: { bg: 'bg-amber-500', text: 'text-amber-700', light: 'bg-amber-50 dark:bg-amber-900/20' },
+};
 
 const fmtINR = (v) => v ? `₹${Number(v).toLocaleString('en-IN')}` : '₹0';
 
-const ExpenseReportView = ({ expenses, plants, currentUser, darkMode, categories: propCategories }) => {
+const ExpenseReportView = ({ expenses, plants, currentUser, darkMode }) => {
   const isAdmin = ['Admin', 'Super Admin', 'Top Management'].includes(currentUser.role);
-  const CATEGORIES = propCategories && propCategories.length > 0 ? propCategories : ['Food', 'Maintenance', 'Utilities', 'Miscellaneous'];
-  // Build CAT_COLORS dynamically from PALETTE so custom categories get colours too
-  const CAT_COLORS = React.useMemo(() => {
-    const map = {};
-    CATEGORIES.forEach((cat, idx) => {
-      map[cat] = PALETTE[idx % PALETTE.length];
-    });
-    return map;
-  }, [CATEGORIES]);
 
   // years available in data
   const years = React.useMemo(() => {
@@ -3110,9 +3195,57 @@ const ExpenseReportView = ({ expenses, plants, currentUser, darkMode, categories
     return t;
   }, [monthlyByCat]);
 
+  // ── COLLECTION REPORT (rows = months, cols = plants) ──
+  const monthlyCollByPlant = React.useMemo(() => {
+    const mat = Array.from({length:12}, () => ({}));
+    filtered.forEach(e => {
+      if (!e.date) return;
+      const m = parseInt(e.date.slice(5,7), 10) - 1;
+      const p = e.plant || 'Unknown';
+      mat[m][p] = (mat[m][p] || 0) + (Number(e.paymentCollected) || 0);
+    });
+    return mat;
+  }, [filtered]);
+
+  const monthlyCollTotals = React.useMemo(() =>
+    monthlyCollByPlant.map(row => Object.values(row).reduce((s,v) => s+v, 0)),
+    [monthlyCollByPlant]
+  );
+
+  const plantCollTotals = React.useMemo(() => {
+    const t = {};
+    allPlants.forEach(p => {
+      t[p] = monthlyCollByPlant.reduce((s, row) => s + (row[p]||0), 0);
+    });
+    return t;
+  }, [monthlyCollByPlant, allPlants]);
+
+  const grandCollTotal = monthlyCollTotals.reduce((s,v) => s+v, 0);
+
+  // ── CATEGORY-WISE COLLECTION (rows = categories, cols = months) ──
+  const monthlyCollByCat = React.useMemo(() => {
+    const mat = Array.from({length:12}, () => ({}));
+    filtered.forEach(e => {
+      if (!e.date) return;
+      const m = parseInt(e.date.slice(5,7), 10) - 1;
+      const c = e.category || 'Miscellaneous';
+      mat[m][c] = (mat[m][c] || 0) + (Number(e.paymentCollected) || 0);
+    });
+    return mat;
+  }, [filtered]);
+
+  const catCollTotals = React.useMemo(() => {
+    const t = {};
+    CATEGORIES.forEach(c => {
+      t[c] = monthlyCollByCat.reduce((s, row) => s + (row[c]||0), 0);
+    });
+    return t;
+  }, [monthlyCollByCat]);
+
   // bar chart max for monthly
   const maxMonthly = Math.max(...monthlyTotals, 1);
   const maxCat = Math.max(...CATEGORIES.map(c => catTotals[c] || 0), 1);
+  const maxColl = Math.max(...monthlyCollTotals, 1);
 
   const cardCls = `bg-white dark:bg-slate-900 rounded-xl shadow border border-slate-200 dark:border-slate-800`;
 
@@ -3164,8 +3297,8 @@ const ExpenseReportView = ({ expenses, plants, currentUser, darkMode, categories
       </div>
 
       {/* Tab selector */}
-      <div className="flex gap-2">
-        {[['monthly','Month-wise by Plant'],['category','Month-wise by Category']].map(([id,label]) => (
+      <div className="flex flex-wrap gap-2">
+        {[['monthly','Month-wise by Plant'],['category','Month-wise by Category'],['collection','Month-wise Collection'],['catCollection','Category-wise Collection']].map(([id,label]) => (
           <button key={id} onClick={() => setReportTab(id)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
               reportTab === id
@@ -3322,6 +3455,186 @@ const ExpenseReportView = ({ expenses, plants, currentUser, darkMode, categories
         </div>
       )}
 
+      {/* ── MONTHLY COLLECTION BY PLANT ── */}
+      {reportTab === 'collection' && (
+        <div className={`${cardCls} overflow-hidden`}>
+          <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg">Month-wise Collection by Plant — {selYear}</h3>
+            <span className="text-xs text-slate-400">₹ values in INR</span>
+          </div>
+
+          {/* KPI strip */}
+          <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 border border-emerald-200 dark:border-emerald-800">
+              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide mb-1">Total Collection</p>
+              <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{fmtINR(grandCollTotal)}</p>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
+              <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">Total Expense</p>
+              <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{fmtINR(grandTotal)}</p>
+            </div>
+            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-200 dark:border-amber-800">
+              <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide mb-1">Net Expense</p>
+              <p className="text-xl font-bold text-amber-700 dark:text-amber-300">{fmtINR(grandTotal - grandCollTotal)}</p>
+            </div>
+            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800">
+              <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide mb-1">Recovery %</p>
+              <p className="text-xl font-bold text-purple-700 dark:text-purple-300">{grandTotal ? ((grandCollTotal/grandTotal)*100).toFixed(1)+'%' : '—'}</p>
+            </div>
+          </div>
+
+          {/* Bar sparklines */}
+          <div className="px-5 pb-5 grid grid-cols-6 md:grid-cols-12 gap-2">
+            {MONTHS.map((m,i) => (
+              <div key={m} className="flex flex-col items-center gap-1">
+                <div className="w-full flex items-end justify-center" style={{height:'60px'}}>
+                  <div className="w-8 rounded-t bg-gradient-to-t from-emerald-600 to-teal-400 transition-all"
+                    style={{height: monthlyCollTotals[i] ? `${Math.max(4,(monthlyCollTotals[i]/maxColl)*60)}px` : '3px', opacity: monthlyCollTotals[i] ? 1 : 0.2}}/>
+                </div>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">{m}</span>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 text-center leading-tight">
+                  {monthlyCollTotals[i] ? `₹${(monthlyCollTotals[i]/1000).toFixed(1)}K` : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800">
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-400 sticky left-0 bg-slate-50 dark:bg-slate-800 whitespace-nowrap min-w-[140px]">Plant</th>
+                  {MONTHS.map(m => (
+                    <th key={m} className="text-right px-3 py-3 font-semibold text-slate-600 dark:text-slate-400 whitespace-nowrap">{m}</th>
+                  ))}
+                  <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 whitespace-nowrap">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allPlants.map(p => {
+                  const hasData = plantCollTotals[p] > 0;
+                  return (
+                    <tr key={p} className={`border-t border-slate-100 dark:border-slate-800 transition-colors ${hasData ? 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10' : 'opacity-50'}`}>
+                      <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-900 whitespace-nowrap">{p}</td>
+                      {MONTHS.map((m,i) => (
+                        <td key={m} className="px-3 py-3 text-right text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                          {monthlyCollByPlant[i][p] ? fmtINR(monthlyCollByPlant[i][p]) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                        </td>
+                      ))}
+                      <td className="px-4 py-3 text-right font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 whitespace-nowrap">
+                        {plantCollTotals[p] ? fmtINR(plantCollTotals[p]) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
+                  <td className="px-4 py-3 font-bold text-slate-800 dark:text-slate-200 sticky left-0 bg-emerald-50 dark:bg-emerald-900/20 whitespace-nowrap">Monthly Total</td>
+                  {MONTHS.map((m,i) => (
+                    <td key={m} className="px-3 py-3 text-right font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                      {monthlyCollTotals[i] ? fmtINR(monthlyCollTotals[i]) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                    </td>
+                  ))}
+                  <td className="px-4 py-3 text-right font-black text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 whitespace-nowrap">{fmtINR(grandCollTotal)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── CATEGORY-WISE COLLECTION ── */}
+      {reportTab === 'catCollection' && (
+        <div className={`${cardCls} overflow-hidden`}>
+          <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg">Category-wise Collection — {selYear}</h3>
+            <span className="text-xs text-slate-400">₹ values in INR</span>
+          </div>
+
+          {/* Category bar summary */}
+          <div className="p-5 space-y-3">
+            {CATEGORIES.map(cat => {
+              const col = CAT_COLORS[cat] || CAT_COLORS.Miscellaneous;
+              const pct = catCollTotals[cat] ? (catCollTotals[cat] / (grandCollTotal || 1)) * 100 : 0;
+              const expPct = catTotals[cat] ? (catCollTotals[cat] / catTotals[cat]) * 100 : 0;
+              return (
+                <div key={cat}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-sm font-semibold ${col.text} dark:opacity-80`}>{cat}</span>
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                      {fmtINR(catCollTotals[cat])}
+                      <span className="text-slate-400 font-normal ml-1">({pct.toFixed(1)}% of total)</span>
+                      {catTotals[cat] > 0 && <span className="ml-2 text-emerald-600 dark:text-emerald-400 font-normal text-xs">{expPct.toFixed(1)}% recovered</span>}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div className={`h-full ${col.bg} rounded-full transition-all duration-700`} style={{width:`${pct}%`}}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Table — Categories as rows, Months as columns */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800">
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 dark:text-slate-400 sticky left-0 bg-slate-50 dark:bg-slate-800 whitespace-nowrap min-w-[140px]">Category</th>
+                  {MONTHS.map(m => (
+                    <th key={m} className="text-right px-3 py-3 font-semibold text-slate-600 dark:text-slate-400 whitespace-nowrap">{m}</th>
+                  ))}
+                  <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 whitespace-nowrap">Total</th>
+                  <th className="text-right px-4 py-3 font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 whitespace-nowrap">Recovery %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {CATEGORIES.map(c => {
+                  const col = CAT_COLORS[c] || CAT_COLORS.Miscellaneous;
+                  const hasData = catCollTotals[c] > 0;
+                  const recoveryPct = catTotals[c] > 0 ? ((catCollTotals[c] / catTotals[c]) * 100).toFixed(1) + '%' : '—';
+                  return (
+                    <tr key={c} className={`border-t border-slate-100 dark:border-slate-800 transition-colors ${hasData ? 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40' : 'opacity-50'}`}>
+                      <td className={`px-4 py-3 font-semibold sticky left-0 bg-white dark:bg-slate-900 whitespace-nowrap ${col.text} dark:opacity-80`}>{c}</td>
+                      {MONTHS.map((m,i) => (
+                        <td key={m} className={`px-3 py-3 text-right whitespace-nowrap ${monthlyCollByCat[i][c] ? 'text-emerald-700 dark:text-emerald-400 font-medium' : ''}`}>
+                          {monthlyCollByCat[i][c] ? fmtINR(monthlyCollByCat[i][c]) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                        </td>
+                      ))}
+                      <td className="px-4 py-3 text-right font-bold text-emerald-700 dark:text-emerald-300 whitespace-nowrap bg-emerald-50 dark:bg-emerald-900/20">
+                        {catCollTotals[c] ? fmtINR(catCollTotals[c]) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-purple-600 dark:text-purple-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800">
+                        {recoveryPct}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
+                  <td className="px-4 py-3 font-bold text-slate-800 dark:text-slate-200 sticky left-0 bg-emerald-50 dark:bg-emerald-900/20 whitespace-nowrap">Monthly Total</td>
+                  {MONTHS.map((m,i) => {
+                    const monthCollTotal = CATEGORIES.reduce((s,c) => s + (monthlyCollByCat[i][c]||0), 0);
+                    return (
+                      <td key={m} className="px-3 py-3 text-right font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                        {monthCollTotal ? fmtINR(monthCollTotal) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                      </td>
+                    );
+                  })}
+                  <td className="px-4 py-3 text-right font-black text-emerald-800 dark:text-emerald-300 whitespace-nowrap">{fmtINR(grandCollTotal)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-purple-700 dark:text-purple-300 whitespace-nowrap">
+                    {grandTotal ? ((grandCollTotal/grandTotal)*100).toFixed(1)+'%' : '—'}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Access note for users */}
       {!isAdmin && (
         <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-700 dark:text-blue-400">
@@ -3338,3 +3651,53 @@ root.render(<App />);
   </script>
 </body>
 </html>
+<!--
+╔══════════════════════════════════════════════════════════════════════╗
+║              FIREBASE SETUP GUIDE — READ BEFORE DEPLOYING           ║
+╠══════════════════════════════════════════════════════════════════════╣
+║                                                                      ║
+║  STEP 1 — Create Firebase project                                    ║
+║    • Go to: console.firebase.google.com                              ║
+║    • Click "Add project" → give it a name → Continue                ║
+║                                                                      ║
+║  STEP 2 — Register your web app                                      ║
+║    • In project overview → click </> (Web) icon                      ║
+║    • Copy the firebaseConfig object                                   ║
+║    • Paste it into this HTML file (search: YOUR_API_KEY)             ║
+║                                                                      ║
+║  STEP 3 — Enable Firestore                                           ║
+║    • Build → Firestore Database → Create database                    ║
+║    • Choose "Start in test mode" (good for 30 days)                  ║
+║    • After testing, set production rules below                       ║
+║                                                                      ║
+║  STEP 4 — Firestore Security Rules (paste in Firebase console)       ║
+║  ┌──────────────────────────────────────────────────────────────┐   ║
+║  │ rules_version = '2';                                          │   ║
+║  │ service cloud.firestore {                                     │   ║
+║  │   match /databases/{database}/documents {                     │   ║
+║  │     // Allow read/write only if request comes from your domain│   ║
+║  │     match /{document=**} {                                    │   ║
+║  │       allow read, write: if true; // CHANGE FOR PRODUCTION    │   ║
+║  │     }                                                         │   ║
+║  │   }                                                           │   ║
+║  │ }                                                             │   ║
+║  └──────────────────────────────────────────────────────────────┘   ║
+║                                                                      ║
+║  STEP 5 — Deploy to GitHub Pages                                     ║
+║    • Push this index.html to your GitHub repo                        ║
+║    • Settings → Pages → Source: main branch / root                   ║
+║    • Your app will be live at: username.github.io/repo-name          ║
+║                                                                      ║
+║  COLLECTIONS CREATED IN FIRESTORE:                                   ║
+║    • users       — user accounts (id, username, password, role…)     ║
+║    • plants      — plant names (id = plant name, name field)         ║
+║    • guestHouses — guest house records (id, name, plant)             ║
+║    • expenses    — expense records (all fields)                      ║
+║                                                                      ║
+║  DATA SAFETY DURING HTML UPDATES:                                    ║
+║    • All data lives in Firestore — untouched when you update HTML    ║
+║    • Just push new index.html to GitHub — data is always safe        ║
+║    • No migration needed unless you rename Firestore fields          ║
+║                                                                      ║
+╚══════════════════════════════════════════════════════════════════════╝
+-->
