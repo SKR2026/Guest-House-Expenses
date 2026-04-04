@@ -3434,7 +3434,6 @@ const CAT_COLOR_POOL = [
   { bg: 'bg-teal-500',   text: 'text-teal-700',   light: 'bg-teal-50 dark:bg-teal-900/20' },
 ];
 const getCatColor = (name) => {
-  if (getCatColor(name)) return getCatColor(name);
   const idx = (name || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) % CAT_COLOR_POOL.length;
   return CAT_COLOR_POOL[idx];
 };
