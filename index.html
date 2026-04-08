@@ -111,6 +111,12 @@
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Microsoft MSAL – Azure AD / Microsoft Graph token acquisition -->
+  <script src="https://unpkg.com/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"
+    onerror="console.error('❌ MSAL failed to load from unpkg. Trying jsDelivr fallback…');
+             var s=document.createElement('script');
+             s.src='https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';
+             document.head.appendChild(s);"></script>
 
   <!-- ═══════════════════════════════════════════════════════════════
        FIREBASE CONFIGURATION — managed via in-app Settings UI
@@ -766,6 +772,169 @@ const initialExpenses = [
 const defaultCategories = ['Food', 'Maintenance', 'Utilities', 'Miscellaneous'];
 // `categories` is now managed dynamically from Firestore (expenseCategories state)
 
+// ══════════════════════════════════════════════════════════════════
+//  EMAIL SETTINGS VIEW — Microsoft Graph API Configuration
+//  (Super Admin only) — uses Legal app's proven MSAL singleton flow
+// ══════════════════════════════════════════════════════════════════
+const EmailSettingsView = () => {
+  const [cfg, setCfg] = React.useState(() => window.getGHMailConfig ? window.getGHMailConfig() : (typeof getGHMailConfig !== 'undefined' ? getGHMailConfig() : { msClientId:'', msTenantId:'', notifyEmail:'', notifyOnAdd:true, notifyOnEdit:false }));
+  const [status, setStatus]       = React.useState({ dot:'grey', label:'Checking sign-in status…' });
+  const [savedMsg, setSavedMsg]   = React.useState('');
+  const [testMsg, setTestMsg]     = React.useState('');
+  const [testSending, setTestSending] = React.useState(false);
+
+  // Restore sign-in badge on mount and after saves
+  const refreshBadge = React.useCallback(() => {
+    if (typeof ghGetMsalInstance !== 'function') return;
+    const inst = ghGetMsalInstance();
+    if (inst) {
+      const accs = inst.getAllAccounts();
+      if (accs.length > 0) { setStatus({ dot:'green', label:'✅ Signed in as: ' + accs[0].username }); return; }
+    }
+    const c = typeof getGHMailConfig !== 'undefined' ? getGHMailConfig() : cfg;
+    if (c.msClientId && c.msTenantId) setStatus({ dot:'amber', label:'⚠ Credentials saved — click Sign In to authorize' });
+    else setStatus({ dot:'grey', label:'Enter your Tenant ID & Client ID, then save.' });
+  }, [cfg]);
+
+  React.useEffect(() => { refreshBadge(); }, [refreshBadge]);
+
+  const save = () => {
+    if (typeof saveGHMailConfig !== 'undefined') saveGHMailConfig(cfg);
+    setSavedMsg('✅ Saved!');
+    setTimeout(() => setSavedMsg(''), 2500);
+    refreshBadge();
+  };
+
+  const signIn = async () => {
+    if (!cfg.msClientId || !cfg.msTenantId) { setTestMsg('⚠ Save your Client ID & Tenant ID first.'); setTimeout(()=>setTestMsg(''),3500); return; }
+    // persist before sign-in so getMSGraphToken reads the latest values
+    if (typeof saveGHMailConfig !== 'undefined') saveGHMailConfig(cfg);
+    try {
+      setStatus({ dot:'amber', label:'⏳ Opening Microsoft login…' });
+      await ghGetMSGraphToken();
+      refreshBadge();
+    } catch(e) {
+      setStatus({ dot:'grey', label:'❌ Sign-in failed: ' + e.message.slice(0,100) });
+    }
+  };
+
+  const signOut = async () => {
+    const inst = typeof ghGetMsalInstance !== 'undefined' ? ghGetMsalInstance() : null;
+    if (inst) { try { await inst.clearCache(); } catch(_){} }
+    setStatus({ dot:'amber', label:'⚠ Signed out — click Sign In to re-authorize' });
+  };
+
+  const sendTest = async () => {
+    if (!cfg.notifyEmail) { setTestMsg('⚠ Enter a notification email address first.'); setTimeout(()=>setTestMsg(''),3500); return; }
+    if (typeof saveGHMailConfig !== 'undefined') saveGHMailConfig(cfg);
+    setTestSending(true);
+    setTestMsg('⏳ Signing in & sending test email…');
+    const fakeExpense = { guestName:'Test Guest', guestHouseName:'Block A', plant:'Plant 1', category:'Accommodation', checkIn:'2026-04-01', checkOut:'2026-04-03', amount:3500, paymentCollected:1000, purpose:'Configuration test', submittedBy:'Super Admin' };
+    try {
+      const html = typeof ghBuildEmailHtml !== 'undefined' ? ghBuildEmailHtml(fakeExpense, 'added') : '<p>Test email from Guest House System</p>';
+      await ghSendMail(cfg.notifyEmail, '[GH Expenses] ✅ Email Configuration Test', html);
+      setTestMsg('✅ Test email sent to ' + cfg.notifyEmail + '! Check your inbox.');
+      refreshBadge();
+    } catch(e) {
+      setTestMsg('❌ Failed: ' + e.message.slice(0,120));
+    }
+    setTestSending(false);
+    setTimeout(()=>setTestMsg(''),7000);
+  };
+
+  const dotColor = { green:'#00897b', amber:'#f59e0b', grey:'#9ca3af' }[status.dot] || '#9ca3af';
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div>
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-white">📧 Email Notification Settings</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Configure Microsoft Graph API to send automatic notifications when expenses are added or updated.</p>
+      </div>
+
+      {/* Status banner */}
+      <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+        <span style={{ width:10, height:10, borderRadius:'50%', background:dotColor, boxShadow:'0 0 6px '+dotColor, display:'inline-block', flexShrink:0 }}></span>
+        <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{status.label}</span>
+        {status.dot === 'green'
+          ? <button onClick={signOut} className="ml-auto text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">⎋ Sign Out</button>
+          : <button onClick={signIn} className="ml-auto text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-semibold">🔑 Sign In with Microsoft</button>
+        }
+      </div>
+
+      {/* Azure credentials */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 space-y-4">
+        <h3 className="font-semibold text-slate-700 dark:text-slate-200">☁️ Azure AD App Registration</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Tenant ID</label>
+            <input type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              value={cfg.msTenantId}
+              onChange={e => setCfg(c => ({...c, msTenantId: e.target.value}))}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Client (Application) ID</label>
+            <input type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              value={cfg.msClientId}
+              onChange={e => setCfg(c => ({...c, msClientId: e.target.value}))}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+        </div>
+        <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+          ⚡ <strong>How it works:</strong> Save your Client ID &amp; Tenant ID, click <strong>Sign In with Microsoft</strong>. A popup authenticates you once — emails send silently after that. No client secret needed.
+        </div>
+      </div>
+
+      {/* Notification config */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 space-y-4">
+        <h3 className="font-semibold text-slate-700 dark:text-slate-200">🔔 Notification Configuration</h3>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Notification Email (To)</label>
+          <input type="email" placeholder="finance@polyplastics.com"
+            value={cfg.notifyEmail}
+            onChange={e => setCfg(c => ({...c, notifyEmail: e.target.value}))}
+            className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <p className="text-xs text-slate-400 mt-1">This address receives expense notifications.</p>
+        </div>
+        <div className="space-y-2">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" checked={cfg.notifyOnAdd} onChange={e => setCfg(c => ({...c, notifyOnAdd: e.target.checked}))}
+              className="w-4 h-4 accent-blue-600 cursor-pointer" />
+            <span className="text-sm text-slate-700 dark:text-slate-300"><strong>New Expense Added</strong> — notify when any expense record is created</span>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" checked={cfg.notifyOnEdit} onChange={e => setCfg(c => ({...c, notifyOnEdit: e.target.checked}))}
+              className="w-4 h-4 accent-blue-600 cursor-pointer" />
+            <span className="text-sm text-slate-700 dark:text-slate-300"><strong>Expense Edited</strong> — notify when an existing expense is updated</span>
+          </label>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button onClick={save} className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">💾 Save Settings</button>
+        <button onClick={sendTest} disabled={testSending} className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold disabled:opacity-60">📨 Send Test Email</button>
+        {savedMsg && <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">{savedMsg}</span>}
+        {testMsg  && <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{testMsg}</span>}
+      </div>
+
+      {/* Setup guide */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+        <h3 className="font-semibold text-slate-700 dark:text-slate-200 mb-4">📖 Azure AD Setup Guide (Delegated / MSAL)</h3>
+        <ol className="space-y-2 text-sm text-slate-600 dark:text-slate-300 list-decimal list-inside leading-relaxed">
+          <li>Go to <strong>portal.azure.com</strong> → Microsoft Entra ID → App Registrations → <strong>New Registration</strong></li>
+          <li>Name the app (e.g. <em>GuestHouse Mailer</em>), choose your tenant, click Register</li>
+          <li>Go to <strong>Authentication</strong> → Add a platform → <strong>Single-page application (SPA)</strong> → paste this page's full URL as the Redirect URI → Save</li>
+          <li>Go to <strong>API Permissions</strong> → Add Permission → Microsoft Graph → <em>Delegated</em> → search <code className="bg-slate-100 dark:bg-slate-700 px-1 rounded">Mail.Send</code> → Add → <strong>Grant Admin Consent</strong></li>
+          <li>From <strong>Overview</strong>, copy the Application (client) ID and Directory (tenant) ID → paste above → Save</li>
+          <li>Click <strong>Sign In with Microsoft</strong> — authenticate once. All future emails send silently.</li>
+          <li>Click <strong>Send Test Email</strong> to verify ✓</li>
+        </ol>
+      </div>
+    </div>
+  );
+};
+
 const App = () => {
   const [themeMode, setThemeMode] = useState(getInitialThemeMode);
   const [currentUser, setCurrentUser] = useState(null);
@@ -971,19 +1140,29 @@ const App = () => {
     const expensePayload = buildExpensePayload(data);
     if (!expensePayload) return;
     const newId = getNextId(expenses);
-    const record = { ...expensePayload, id: newId, userId: currentUser.id };
+    const gh = guestHouses.find(g => g.id === parseInt(data.guestHouseId, 10));
+    const record = { ...expensePayload, id: newId, userId: currentUser.id, submittedBy: currentUser.name || currentUser.username };
     try {
       await fbSet('expenses', newId, record);
       closeModal();
+      // Send email notification (fire-and-forget)
+      if (typeof ghNotifyExpenseAdded === 'function') {
+        ghNotifyExpenseAdded({ ...record, guestHouseName: gh ? gh.name : '' });
+      }
     } catch (err) { window.alert('Save failed: ' + err.message); }
   };
 
   const handleEditExpense = async (data) => {
     const expensePayload = buildExpensePayload(data, selectedItem);
     if (!expensePayload) return;
+    const gh = guestHouses.find(g => g.id === parseInt(data.guestHouseId, 10));
     try {
       await fbSet('expenses', selectedItem.id, expensePayload);
       closeModal();
+      // Send email notification (fire-and-forget)
+      if (typeof ghNotifyExpenseEdited === 'function') {
+        ghNotifyExpenseEdited({ ...expensePayload, guestHouseName: gh ? gh.name : '' });
+      }
     } catch (err) { window.alert('Update failed: ' + err.message); }
   };
 
@@ -1502,6 +1681,14 @@ const App = () => {
                   label="Categories"
                 />
               )}
+              {currentUser.role === 'Super Admin' && (
+                <NavButton
+                  active={activeTab === 'emailsettings'}
+                  onClick={() => setActiveTab('emailsettings')}
+                  icon={<Settings className="w-4 h-4" />}
+                  label="Email Settings"
+                />
+              )}
             </div>
           </div>
         </nav>
@@ -1595,6 +1782,10 @@ const App = () => {
               onAdd={handleAddCategory}
               onDelete={handleDeleteCategory}
             />
+          )}
+
+          {activeTab === 'emailsettings' && currentUser.role === 'Super Admin' && (
+            <EmailSettingsView />
           )}
         </main>
 
@@ -4048,7 +4239,147 @@ const ExpenseReportView = ({ expenses, plants, currentUser, darkMode, categories
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
   </script>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     MICROSOFT GRAPH EMAIL ENGINE  (ported from Legal Compliance app)
+     Singleton MSAL pattern — no client secret, delegated popup flow
+     ══════════════════════════════════════════════════════════════════ -->
+<script>
+// ── Storage helpers ────────────────────────────────────────────────
+const GH_MAIL_KEY = 'ghMailConfig';
+function getGHMailConfig() {
+  try { return { msClientId:'', msTenantId:'', notifyEmail:'', notifyOnAdd:true, notifyOnEdit:false, ...JSON.parse(localStorage.getItem(GH_MAIL_KEY)||'{}') }; }
+  catch(_) { return { msClientId:'', msTenantId:'', notifyEmail:'', notifyOnAdd:true, notifyOnEdit:false }; }
+}
+function saveGHMailConfig(cfg) {
+  try { localStorage.setItem(GH_MAIL_KEY, JSON.stringify(cfg)); } catch(_) {}
+}
+
+// ── MSAL singleton cache (one instance per clientId::tenantId) ─────
+const _ghMsalInstances = {};
+
+async function ghGetMSGraphToken() {
+  const cfg = getGHMailConfig();
+  if (typeof msal === 'undefined') throw new Error('MSAL library not loaded — check internet connection and refresh.');
+  if (!cfg.msClientId || !cfg.msTenantId) throw new Error('Enter your Azure Client ID & Tenant ID in Email Settings, then save.');
+  const redirectUri = window.location.href.split('?')[0].split('#')[0];
+  const key = cfg.msClientId + '::' + cfg.msTenantId;
+  if (!_ghMsalInstances[key]) {
+    const inst = new msal.PublicClientApplication({
+      auth: { clientId: cfg.msClientId, authority: 'https://login.microsoftonline.com/' + cfg.msTenantId, redirectUri },
+      cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
+    });
+    await inst.initialize();
+    _ghMsalInstances[key] = inst;
+    console.log('[GH Mail] MSAL instance created — redirectUri:', redirectUri);
+  }
+  const inst = _ghMsalInstances[key];
+  const request = { scopes: ['Mail.Send', 'User.Read'] };
+  const accounts = inst.getAllAccounts();
+  if (accounts.length > 0) {
+    try { const r = await inst.acquireTokenSilent({ ...request, account: accounts[0] }); return r.accessToken; }
+    catch(_) { /* fall through to popup */ }
+  }
+  const popup = await inst.loginPopup(request);
+  return popup.accessToken;
+}
+
+function ghGetMsalInstance() {
+  const cfg = getGHMailConfig();
+  if (!cfg.msClientId || !cfg.msTenantId) return null;
+  return _ghMsalInstances[cfg.msClientId + '::' + cfg.msTenantId] || null;
+}
+
+async function ghSendMail(toEmail, subject, htmlBody) {
+  const token = await ghGetMSGraphToken();
+  const res = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: { subject, body: { contentType: 'HTML', content: htmlBody }, toRecipients: [{ emailAddress: { address: toEmail } }] }, saveToSentItems: false })
+  });
+  if (!res.ok) { const err = await res.text().catch(() => res.statusText); throw new Error('Graph ' + res.status + ': ' + err); }
+}
+
+// ── Email HTML builder ─────────────────────────────────────────────
+function ghBuildEmailHtml(expense, action) {
+  const rows = [
+    ['Guest Name', expense.guestName || '—'],
+    ['Guest House', expense.guestHouseName || expense.guestHouseId || '—'],
+    ['Plant', expense.plant || '—'],
+    ['Category', expense.category || '—'],
+    ['Check-In', expense.checkIn || '—'],
+    ['Check-Out', expense.checkOut || '—'],
+    ['Amount', expense.amount != null ? '₹ ' + Number(expense.amount).toLocaleString('en-IN', {minimumFractionDigits:2}) : '—'],
+    ['Payment Collected', expense.paymentCollected != null ? '₹ ' + Number(expense.paymentCollected).toLocaleString('en-IN', {minimumFractionDigits:2}) : '—'],
+    ['Purpose / Remarks', expense.purpose || expense.remarks || '—'],
+    ['Submitted By', expense.submittedBy || '—'],
+  ].filter(([,v]) => v && v !== '—');
+
+  const rowsHtml = rows.map(([label, value]) => `
+    <tr>
+      <td style="padding:10px 18px;font-size:12px;color:#555e6e;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:.06em;width:150px;border-bottom:1px solid #e8ecf2;vertical-align:top;font-weight:600;white-space:nowrap;">${label}</td>
+      <td style="padding:10px 18px;font-size:14px;color:#1a2033;font-family:'Segoe UI',Arial,sans-serif;border-bottom:1px solid #e8ecf2;line-height:1.6;">${value}</td>
+    </tr>`).join('');
+
+  const accentColor = action === 'added' ? '#0097a7' : '#6c63ff';
+  const actionLabel = action === 'added' ? 'New Expense Recorded' : 'Expense Updated';
+  const actionIcon = action === 'added' ? '🏨' : '✏️';
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f2f7;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f7;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);border:1px solid #dde3ee;">
+        <tr><td style="background:linear-gradient(135deg,#1a2033 0%,#252d45 100%);padding:26px 32px;">
+          <table width="100%"><tr>
+            <td>
+              <div style="font-size:20px;margin-bottom:10px;">${actionIcon}</div>
+              <div style="font-family:'Courier New',monospace;font-size:12px;color:${accentColor};letter-spacing:.14em;text-transform:uppercase;font-weight:700;margin-bottom:8px;">POLYPLASTICS — Guest House System</div>
+              <h2 style="color:#ffffff;font-size:20px;margin:0;font-weight:600;line-height:1.4;">${actionLabel}</h2>
+            </td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="height:4px;background:linear-gradient(90deg,${accentColor},${accentColor}88);"></td></tr>
+        <tr><td style="padding:8px 0;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${rowsHtml}</table>
+        </td></tr>
+        <tr><td style="background:#f7f9fc;border-top:1px solid #e8ecf2;padding:16px 24px;">
+          <p style="font-size:12px;color:#7b8899;margin:0;font-family:Arial,sans-serif;line-height:1.7;">
+            📋 This is an automated notification from the <strong style="color:#4a5568;">Polyplastics Guest House Expense System</strong>.<br>
+            Log in to the system to view the full record.
+          </p>
+        </td></tr>
+      </table>
+      <p style="font-size:11px;color:#9aa5b4;margin-top:16px;font-family:Arial,sans-serif;text-align:center;">© Polyplastics — Guest House Management System</p>
+    </td></tr>
+  </table>
+</body></html>`;
+}
+
+// ── Public send functions (called from React handlers) ─────────────
+async function ghNotifyExpenseAdded(expense) {
+  const cfg = getGHMailConfig();
+  if (!cfg.notifyOnAdd || !cfg.notifyEmail || !cfg.msClientId || !cfg.msTenantId) return;
+  try {
+    const html = ghBuildEmailHtml(expense, 'added');
+    await ghSendMail(cfg.notifyEmail, '[GH Expenses] New Expense — ' + (expense.guestName || 'Guest') + ' @ ' + (expense.guestHouseName || expense.plant || ''), html);
+    console.log('[GH Mail] New expense notification sent');
+  } catch(e) { console.warn('[GH Mail] Send failed:', e.message); }
+}
+
+async function ghNotifyExpenseEdited(expense) {
+  const cfg = getGHMailConfig();
+  if (!cfg.notifyOnEdit || !cfg.notifyEmail || !cfg.msClientId || !cfg.msTenantId) return;
+  try {
+    const html = ghBuildEmailHtml(expense, 'edited');
+    await ghSendMail(cfg.notifyEmail, '[GH Expenses] Expense Updated — ' + (expense.guestName || 'Guest') + ' @ ' + (expense.guestHouseName || expense.plant || ''), html);
+    console.log('[GH Mail] Edit notification sent');
+  } catch(e) { console.warn('[GH Mail] Send failed:', e.message); }
+}
+</script>
 </body>
+</html>
 </html>
 <!--
 ╔══════════════════════════════════════════════════════════════════════╗
