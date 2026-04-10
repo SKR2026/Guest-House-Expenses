@@ -2835,7 +2835,13 @@ const Modal = ({ type, data, guestHouses, plants, categories, onClose, onSubmit 
   };
 
   const handleChange = (field, value) => {
-    setFormData({ ...formData, [field]: value });
+    if (field === 'role') {
+      // Reset plant when role changes to avoid stale/invalid plant value
+      const newPlant = value === 'User' ? '' : 'All';
+      setFormData({ ...formData, role: value, plant: newPlant });
+    } else {
+      setFormData({ ...formData, [field]: value });
+    }
   };
 
   const getTitle = () => {
@@ -3144,7 +3150,11 @@ const Modal = ({ type, data, guestHouses, plants, categories, onClose, onSubmit 
                   Plant
                 </label>
                 <select
-                  value={formData.plant || ''}
+                  value={
+                    formData.role === 'User'
+                      ? (plants.includes(formData.plant) ? formData.plant : '')
+                      : (formData.plant === 'All' ? 'All' : 'All')
+                  }
                   onChange={(e) => handleChange('plant', e.target.value)}
                   className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
                   required
@@ -4317,8 +4327,8 @@ function ghBuildEmailHtml(expense, action) {
 
   const rowsHtml = rows.map(([label, value]) => `
     <tr>
-      <td style="padding:10px 18px;font-size:12px;color:#555e6e;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:.06em;width:150px;border-bottom:1px solid #e8ecf2;vertical-align:top;font-weight:600;white-space:nowrap;">${label}</td>
-      <td style="padding:10px 18px;font-size:14px;color:#1a2033;font-family:'Segoe UI',Arial,sans-serif;border-bottom:1px solid #e8ecf2;line-height:1.6;">${value}</td>
+      <td style="padding:11px 20px;font-size:14px;color:#555e6e;font-family:'Times New Roman',Times,serif;text-transform:uppercase;letter-spacing:.06em;width:160px;border-bottom:1px solid #e8ecf2;vertical-align:top;font-weight:700;white-space:nowrap;">${label}</td>
+      <td style="padding:11px 20px;font-size:14px;color:#1a2033;font-family:'Times New Roman',Times,serif;border-bottom:1px solid #e8ecf2;line-height:1.8;">${value}</td>
     </tr>`).join('');
 
   const accentColor = action === 'added' ? '#0097a7' : '#6c63ff';
@@ -4327,31 +4337,31 @@ function ghBuildEmailHtml(expense, action) {
 
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f0f2f7;font-family:'Segoe UI',Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f7;padding:32px 0;">
+<body style="margin:0;padding:0;background:#f0f2f7;font-family:'Times New Roman',Times,serif;font-size:14px;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f7;padding:40px 0;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);border:1px solid #dde3ee;">
-        <tr><td style="background:linear-gradient(135deg,#1a2033 0%,#252d45 100%);padding:26px 32px;">
+      <table width="620" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:28px;overflow:hidden;box-shadow:0 6px 32px rgba(0,0,0,0.12);border:1px solid #dde3ee;">
+        <tr><td style="background:linear-gradient(135deg,#1a2033 0%,#252d45 100%);padding:30px 36px;border-radius:28px 28px 0 0;">
           <table width="100%"><tr>
             <td>
-              <div style="font-size:20px;margin-bottom:10px;">${actionIcon}</div>
-              <div style="font-family:'Courier New',monospace;font-size:12px;color:${accentColor};letter-spacing:.14em;text-transform:uppercase;font-weight:700;margin-bottom:8px;">POLYPLASTICS — Guest House System</div>
-              <h2 style="color:#ffffff;font-size:20px;margin:0;font-weight:600;line-height:1.4;">${actionLabel}</h2>
+              <div style="font-size:22px;margin-bottom:10px;">${actionIcon}</div>
+              <div style="font-family:'Times New Roman',Times,serif;font-size:13px;color:${accentColor};letter-spacing:.14em;text-transform:uppercase;font-weight:700;margin-bottom:8px;">POLYPLASTICS — Guest House System</div>
+              <h2 style="color:#ffffff;font-size:22px;margin:0;font-weight:700;line-height:1.4;font-family:'Times New Roman',Times,serif;">${actionLabel}</h2>
             </td>
           </tr></table>
         </td></tr>
         <tr><td style="height:4px;background:linear-gradient(90deg,${accentColor},${accentColor}88);"></td></tr>
-        <tr><td style="padding:8px 0;">
+        <tr><td style="padding:10px 0;">
           <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${rowsHtml}</table>
         </td></tr>
-        <tr><td style="background:#f7f9fc;border-top:1px solid #e8ecf2;padding:16px 24px;">
-          <p style="font-size:12px;color:#7b8899;margin:0;font-family:Arial,sans-serif;line-height:1.7;">
+        <tr><td style="background:#f7f9fc;border-top:1px solid #e8ecf2;padding:20px 28px;border-radius:0 0 28px 28px;">
+          <p style="font-size:14px;color:#7b8899;margin:0;font-family:'Times New Roman',Times,serif;line-height:1.9;">
             📋 This is an automated notification from the <strong style="color:#4a5568;">Polyplastics Guest House Expense System</strong>.<br>
             Log in to the system to view the full record.
           </p>
         </td></tr>
       </table>
-      <p style="font-size:11px;color:#9aa5b4;margin-top:16px;font-family:Arial,sans-serif;text-align:center;">© Polyplastics — Guest House Management System</p>
+      <p style="font-size:13px;color:#9aa5b4;margin-top:18px;font-family:'Times New Roman',Times,serif;text-align:center;">© Polyplastics — Guest House Management System</p>
     </td></tr>
   </table>
 </body></html>`;
