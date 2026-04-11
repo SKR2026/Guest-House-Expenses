@@ -815,16 +815,32 @@ const EmailSettingsView = () => {
       if (accs.length > 0) { setStatus({ dot:'green', label:'✅ Signed in as: ' + accs[0].username }); return; }
     }
     const c = typeof getGHMailConfig !== 'undefined' ? getGHMailConfig() : cfg;
-    if (c.msClientId && c.msTenantId) setStatus({ dot:'amber', label:'⚠ Credentials saved — click Sign In to authorize' });
+    if (c.msClientId && c.msTenantId) setStatus({ dot:'amber', label:'⚠ Credentials saved — click Sign In to authorize (or reload page to auto-resume)' });
     else setStatus({ dot:'grey', label:'Enter your Tenant ID & Client ID, then save.' });
   }, [cfg]);
 
   React.useEffect(() => { refreshBadge(); }, [refreshBadge]);
 
-  const save = () => {
+  const save = async () => {
     if (typeof saveGHMailConfig !== 'undefined') saveGHMailConfig(cfg);
     setSavedMsg('✅ Saved!');
     setTimeout(() => setSavedMsg(''), 2500);
+    // Pre-warm MSAL instance now so it loads cached token on next page reload
+    if (cfg.msClientId && cfg.msTenantId && typeof msal !== 'undefined') {
+      try {
+        const redirectUri = window.location.href.split('?')[0].split('#')[0];
+        const key = cfg.msClientId + '::' + cfg.msTenantId;
+        if (!window._ghMsalInstances || !window._ghMsalInstances[key]) {
+          const inst = new msal.PublicClientApplication({
+            auth: { clientId: cfg.msClientId, authority: 'https://login.microsoftonline.com/' + cfg.msTenantId, redirectUri },
+            cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
+          });
+          await inst.initialize();
+          if (window._ghMsalInstances) window._ghMsalInstances[key] = inst;
+          console.log('[GH Mail] MSAL instance pre-warmed after save.');
+        }
+      } catch(e) { console.warn('[GH Mail] Pre-warm after save failed:', e.message); }
+    }
     refreshBadge();
   };
 
@@ -4329,6 +4345,29 @@ function saveGHMailConfig(cfg) {
 
 // ── MSAL singleton cache (one instance per clientId::tenantId) ─────
 const _ghMsalInstances = {};
+
+// ── Eagerly restore MSAL instance from saved config on page load ────
+// This lets MSAL pick up the cached session from localStorage so the
+// user does NOT need to click "Sign In with Microsoft" on every reload.
+(async function ghRestoreMsalOnLoad() {
+  try {
+    const cfg = getGHMailConfig();
+    if (!cfg.msClientId || !cfg.msTenantId) return;
+    if (typeof msal === 'undefined') return;
+    const redirectUri = window.location.href.split('?')[0].split('#')[0];
+    const key = cfg.msClientId + '::' + cfg.msTenantId;
+    if (_ghMsalInstances[key]) return; // already created
+    const inst = new msal.PublicClientApplication({
+      auth: { clientId: cfg.msClientId, authority: 'https://login.microsoftonline.com/' + cfg.msTenantId, redirectUri },
+      cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
+    });
+    await inst.initialize();
+    _ghMsalInstances[key] = inst;
+    console.log('[GH Mail] MSAL instance restored on page load — accounts:', inst.getAllAccounts().length);
+  } catch(e) {
+    console.warn('[GH Mail] Could not pre-restore MSAL instance:', e.message);
+  }
+})();
 
 async function ghGetMSGraphToken() {
   const cfg = getGHMailConfig();
