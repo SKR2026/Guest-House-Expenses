@@ -1853,7 +1853,7 @@ const App = () => {
   }
 
   if (!currentUser) {
-    return <LoginScreen onLogin={handleLogin} darkMode={darkMode} setThemeMode={setThemeMode} />;
+    return <LoginScreen onLogin={handleLogin} darkMode={darkMode} themeMode={themeMode} setThemeMode={setThemeMode} />;
   }
 
   const { guestHouses: accessibleGuestHousesRaw, expenses: accessibleExpenses } = getAccessibleData();
@@ -2115,7 +2115,7 @@ const FirebaseSetupBanner = () => {
   );
 };
 
-const LoginScreen = ({ onLogin, darkMode, setThemeMode }) => {
+const LoginScreen = ({ onLogin, darkMode, themeMode, setThemeMode }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
