@@ -2652,13 +2652,16 @@ const DashboardView = ({ currentUser, stats, expenses, guestHouses, darkMode, fi
 // Expenses View
 const ExpensesView = ({ expenses, guestHouses, currentUser, onAdd, onBulkUpload, onEdit, onDelete, onBulkDelete, filterPlant, setFilterPlant, filterGuestHouse, setFilterGuestHouse, filterCategory, setFilterCategory, plants, categories, applyFilters, handleExport, handleExportGuestList }) => {
   const [guestSearch, setGuestSearch] = React.useState('');
+  const [empSearch, setEmpSearch] = React.useState('');
   const [selectedIds, setSelectedIds] = React.useState(new Set());
   const isSuperAdmin = currentUser.role === 'Super Admin';
 
   const filtered = applyFilters(expenses).filter(e => {
-    if (!guestSearch.trim()) return true;
     const q = guestSearch.trim().toLowerCase();
-    return (e.guestName || '').toLowerCase().includes(q);
+    const eq = empSearch.trim().toLowerCase();
+    const matchGuest = !q || (e.guestName || '').toLowerCase().includes(q);
+    const matchEmp = !eq || (e.employeeId || '').toLowerCase().includes(eq);
+    return matchGuest && matchEmp;
   });
 
   const allSelected = filtered.length > 0 && filtered.every(e => selectedIds.has(e.id));
@@ -2753,6 +2756,25 @@ const ExpensesView = ({ expenses, guestHouses, currentUser, onAdd, onBulkUpload,
             {guestSearch && (
               <button
                 onClick={() => setGuestSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          {/* Employee ID Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
+            <input
+              type="text"
+              value={empSearch}
+              onChange={(e) => setEmpSearch(e.target.value)}
+              placeholder="Search employee ID…"
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+            {empSearch && (
+              <button
+                onClick={() => setEmpSearch('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
               >
                 <X className="w-3.5 h-3.5" />
